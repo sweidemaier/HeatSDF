@@ -1,4 +1,5 @@
 # SLIDE
-Siren based Learning for Implicit Distance Estimation
+SIREN based Learning for Implicit Distance Estimation
+(ChatGPT's Vorschlag)
 ### Usage 
 ....
