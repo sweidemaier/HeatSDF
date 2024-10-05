@@ -11,6 +11,7 @@ SIREN based Learning for Implicit Distance Estimation
 - pip install git+https://github.com/marian42/mesh_to_sdf.git
 - conda install tqdm
 
+
 ### Training:
 To change between heat/ 2nd- step change in config/recon/create_neural_field.yaml: 
 - in the category  trainer - type - trainers.w_normf_trainer or trainers.heat_trainer, where heat_trainer corresponds to the heat flow learning and w_normf_trainer corresponds to the SDF learning using the input normalfield from step 1
@@ -19,7 +20,6 @@ To change between heat/ 2nd- step change in config/recon/create_neural_field.yam
 Then run "python train_heat.py configs/recon/create_neural_fields.yaml" or "python train_with_normalfield.py configs/recon/create_neural_fields.yaml"
 
 ### Some open corrections
-- unused stuff
 - table tex file
 
 
