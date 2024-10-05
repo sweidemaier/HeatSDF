@@ -20,7 +20,6 @@ Then run "python train_heat.py configs/recon/create_neural_fields.yaml --hparams
 
 ### Some open corrections
 - unused stuff
-- usage
 - table tex file
 
 
