@@ -15,7 +15,7 @@ SIREN based Learning for Implicit Distance Estimation
 To change between heat/ 2nd- step change in config/recon/create_neural_field.yaml: 
 - in the category  trainer - type - trainers.w_normf_trainer or trainers.heat_trainer, where heat_trainer corresponds to the heat flow learning and w_normf_trainer corresponds to the SDF learning using the input normalfield from step 1
 - change in category input desired parameters (for heat: epsilon and tau, for 2nd-step: net-paths and other parameters)
-- then run "python train_heat.py configs/recon/create_neural_fields.yaml --hparams data.path=/home/.../sphere2.npy" or "python train_with_normalfield.py configs/recon/create_neural_fields.yaml --hparams data.path=/.../sphere2.npy"
+Then run "python train_heat.py configs/recon/create_neural_fields.yaml --hparams data.path=/home/.../sphere2.npy" or "python train_with_normalfield.py configs/recon/create_neural_fields.yaml --hparams data.path=/.../sphere2.npy"
 
 ### Some open corrections
 - unused stuff
