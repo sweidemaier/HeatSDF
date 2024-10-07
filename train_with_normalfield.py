@@ -70,9 +70,7 @@ def get_args():
     # command line args
     parser = argparse.ArgumentParser(
         description='Flow-based Point Cloud Generation Experiment')
-    parser.add_argument('config', type=str,
-                        help='The configuration file.')
-
+    
     # distributed training
     parser.add_argument('--gpu', default=None, type=int,
                         help='GPU id to use. None means using all '
@@ -91,7 +89,7 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open(args.config, 'r') as f:
+    with open("configs/recon/create_neural_fields.yaml", 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
@@ -99,7 +97,7 @@ def get_args():
     # Currently save dir and log_dir are the same
     if not hasattr(config, "log_dir"):
         #  Create log_name
-        cfg_file_name = os.path.splitext(os.path.basename(args.config))[0]
+        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/create_neural_fields.yaml"))[0]
         run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
         post_fix = hparam_str + run_time
 
@@ -121,10 +119,6 @@ def main_worker(cfg, args):
     cudnn.benchmark = True
 
     writer = SummaryWriter(log_dir=cfg.log_name)
-    data_lib = importlib.import_module(cfg.data.type)
-    loaders = data_lib.get_data_loaders(cfg.data, args)
-    train_loader = loaders['train_loader']
-    test_loader = loaders['test_loader']
     trainer_lib = importlib.import_module(cfg.trainer.type)
     trainer = trainer_lib.Trainer(cfg, args)
 
@@ -136,12 +130,6 @@ def main_worker(cfg, args):
             start_epoch = trainer.resume(args.pretrained)
         else:
             start_epoch = trainer.resume(cfg.resume.dir)
-
-    # If test run, go through the validation loop first
-    if args.test_run:
-        trainer.save(epoch=-1, step=-1)
-        val_info = trainer.validate(test_loader, epoch=-1)
-        trainer.log_val(val_info, writer=writer, epoch=-1)
 
     # main training loop
     print("Start epoch: %d End epoch: %d" % (start_epoch, cfg.trainer.epochs + start_epoch))
@@ -189,19 +177,11 @@ def main_worker(cfg, args):
         # train for one epoch
         loader_start = time.time()
         leng = 1000
-        #print(len(train_dataloader))
         for batchnumber in range(len(train_dataloader)):  
             loader_duration = time.time() - loader_start
             loader_meter.update(loader_duration)
             step = batchnumber + leng * epoch + 1
-            ####
-              
             
-            #choice = np.random.choice(len(points), size=100000, replace=False)
-            # print((next(iter(train_dataloader))[0]['coords']).squeeze().shape)
-            #point_sample = points[choice, :]
-            #point_sample = point_sample.tolist()
-            #print(next(iter_tr).squeeze())
             logs_info = trainer.update(next(iter_tr).squeeze(), nearby_net, far_net, cfg)#next(iter_tr).squeeze(), input_net, cfg) #next(iter(train_dataloader))[0]['coords'].squeeze()
             #next(iter_tr).squeeze()
             if step % int(cfg.viz.log_freq) == 0 and int(cfg.viz.log_freq) > 0:
@@ -210,19 +190,17 @@ def main_worker(cfg, args):
                 start_time = time.time()
                 print("Epoch %d Batch [%2d/%2d] Time [%3.2fs] Loading [%3.2fs]"
                       " Loss %2.5f"
-                      % (epoch, batchnumber, 400, duration_meter.avg,
+                      % (epoch, batchnumber, len(train_dataloader), duration_meter.avg,
                          loader_meter.avg, logs_info['loss']))
                 
-                #trainer.log_train(
-                #    logs_info, data,
-                #    writer=writer, epoch=epoch, step=step, visualize=visualize)
-            
+                
             # Reset loader time
             loader_start = time.time()
         visualize = True
-        trainer.sch.step(trainer.validate(nearby_net, far_net, points, cfg)['loss'])
+        val = trainer.validate(nearby_net, far_net, points, cfg)
+        trainer.sch.step(val['loss'])
         trainer.log_train(
-            trainer.validate(nearby_net, far_net, points, cfg), 
+            val, 
             writer=writer, epoch=epoch, step=step, visualize=visualize)
         # Save first so that even if the visualization bugged,
         # we still have something
