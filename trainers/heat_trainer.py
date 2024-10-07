@@ -84,6 +84,7 @@ class Trainer(BaseTrainer):
             loss = loss_1 - 2*sprod 
         
         if (dims == 3):
+            #TODO direkt als (3,bs) samplen
             x = np.random.uniform(-1.3,1.3, bs)
             y = np.random.uniform(-1.3,1.3, bs)
             z = np.random.uniform(-1.3,1.3, bs)
@@ -91,6 +92,7 @@ class Trainer(BaseTrainer):
             dist = [None]*bs
             i = 0
             while i < bs:
+                #TODO Schleife weg 
                 xyz_list[i] = [x[i],y[i],z[i]]
                 norm = np.linalg.norm(xyz_list[i], 2)
                 dist[i] = [x[i] - x[i]/norm,y[i] - y[i]/norm,z[i] - z[i]/norm]
@@ -173,6 +175,7 @@ class Trainer(BaseTrainer):
             lsp = np.linspace(-1.5, 1.5, max_size)
             bs = max_size**2
             sample = [None]*(max_size**2)
+            #TODO ohne Schleife 
             while i < max_size:
                 j = 0
                 while j < max_size:
@@ -209,6 +212,7 @@ class Trainer(BaseTrainer):
             z = np.random.uniform(-1.3,1.3, bs)
             xyz_list = [None]*bs
             i = 0
+            #TODO Schleife weg 
             while i < bs:
                 xyz_list[i] = [x[i],y[i],z[i]]
                 i = i+1

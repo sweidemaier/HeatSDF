@@ -20,6 +20,8 @@ def comp_weights(pointcloud, epsilon, dim = 2 ):
     print(eps)
     p = tr.query_ball_point(x = pointcloud, r = eps, workers = -1)
     while i <  np.size(p):
+        #TODO I think you can check directly for every i 
+        #if any(len(ball) < a for ball in p:
         if np.size(p[i]) < 12:
             eps *= 2
             p = tr.query_ball_point(x = pointcloud, r = eps, workers = -1)
@@ -33,6 +35,13 @@ def comp_weights(pointcloud, epsilon, dim = 2 ):
         count = np.size(p[i])
         j = 0
         sum = 0
+        #TODO remove loop and calculate directly for every j 
+        #proposal: (maybe not the best way)
+        #ball_indices = p[i]
+        #ball_points = pointcloud[ball_indices]
+        #dists = np.linalg.norm(pointcloud[i]-ballpoints, axis = 1)
+        #sum = np.sum([bumb_func(dists[i]/eps) for i in range(len(dists))])
+        #now it might be even possible to also skip the outer loop
         while j < count:
             p_j = pointcloud[p[i][j]]
             diff = np.subtract(pointcloud[i],p_j)

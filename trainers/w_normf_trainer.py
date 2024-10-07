@@ -67,6 +67,7 @@ class Trainer(BaseTrainer):
             outer = [None]*100
             i = 0
             j = 0
+            #TODO remove the loops 
             while j < 100:
                 inner[j] = [0.1*np.cos(phi_bound[j]), 0.1*np.sin(phi_bound[j])]
                 outer[j] = [1.5*np.cos(phi_bound[j]), 1.5*np.sin(phi_bound[j])]
@@ -125,6 +126,7 @@ class Trainer(BaseTrainer):
             def eta(x):
                 return ((torch.arctan((-1)*scaling*x) + np.pi/2)/np.pi)
             #defining pointsample of domain and boundaries
+            #TODO sample directly with shape (3,bs)
             x = np.random.uniform(-1.3,1.3,bs)
             y = np.random.uniform(-1.3,1.3,bs)
             z = np.random.uniform(-1.3,1.3,bs)
@@ -141,6 +143,7 @@ class Trainer(BaseTrainer):
             domain_bound = 1.3
             inner_bound = np.linspace(0, inner_radius, 500)
             while j < 500:
+                #TODO remove loop and vectorize
                 inner[j] = [inner_bound[j]*np.sin(theta[j])*np.cos(phi[j]), inner_bound[j]*np.sin(theta[j])*np.sin(phi[j]), inner_bound[j]*np.cos(theta[j])]
                 outer[j] = [domain_bound*np.sin(theta[j])*np.cos(phi[j]), domain_bound*np.sin(theta[j])*np.sin(phi[j]), domain_bound*np.cos(theta[j])]
                 j = j + 1
@@ -155,6 +158,7 @@ class Trainer(BaseTrainer):
             outer.requires_grad = True
             
             while i < bs:
+                #TODO remove loop 
                 xyz_list_1[i] = [x[i],y[i],z[i]]
                 norm_vector[i] = np.linalg.norm(xyz_list_1[i], 2)
                 normed[i] = [x[i]/norm_vector[i],y[i]/norm_vector[i],z[i]/norm_vector[i]]
@@ -163,7 +167,10 @@ class Trainer(BaseTrainer):
             xyz_1 = torch.tensor(xyz_list_1)
             xyz_1 = xyz_1.cuda()
             xyz_1.requires_grad = True
-        
+
+
+            #TODO add a few more comments for the following part
+
             #sdf zero level set loss
             out_surf = self.net(points)
             sdf_loss_on_surface = torch.square(out_surf).mean()
@@ -181,6 +188,7 @@ class Trainer(BaseTrainer):
             pot_cut = input_net(xyz_1)
             far_pot_cut = far_net(xyz_1)
             #for sphere: 5
+            #TODO maybe rename norm_on_surf_loss ? 
             norm_on_surf_loss_1 = (grad_1 - input_sample_1).norm(p = 2, dim=-1)
             norm_on_surf_loss_2 = (grad_1 + input_sample_1).norm(p = 2, dim=-1)
             far_grad_input = gradient(far_net(xyz_1), xyz_1).view(bs, 3)
@@ -279,6 +287,7 @@ class Trainer(BaseTrainer):
             outer = [None]*100
             inner = [None]*100
             i = 0
+            #TODO remove both loops 
             while i < bs:
                 xyz_list_1[i] = [x[i],y[i]]
                 norm = np.linalg.norm(xyz_list_1[i], 2)
@@ -365,6 +374,7 @@ class Trainer(BaseTrainer):
             outer = [None]*(500)
             i = 0
             j = 0
+            #TODO remove loops 
             while j < 500:
                 inner[j] = [0.01*np.sin(theta[j])*np.cos(phi[j]), 0.01*np.sin(theta[j])*np.sin(phi[j]), 0.01*np.cos(theta[j])]
                 outer[j] = [1.1*np.sin(theta[j])*np.cos(phi[j]), 1.1*np.sin(theta[j])*np.sin(phi[j]), 1.1*np.cos(theta[j])]
