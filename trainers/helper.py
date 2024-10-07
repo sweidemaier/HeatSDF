@@ -15,50 +15,26 @@ def comp_weights(pointcloud, epsilon, dim = 2 ):
     #c_eps = c[0]*(epsilon**dim)
     c_eps = (epsilon**dim)
     tr = tree.KDTree(pointcloud)
-    i = 0
+    
     eps = epsilon
-    print(eps)
+    print("initial eps:", eps)
     p = tr.query_ball_point(x = pointcloud, r = eps, workers = -1)
-    while i <  np.size(p):
-        #TODO I think you can check directly for every i 
-        #if any(len(ball) < a for ball in p:
-        if np.size(p[i]) < 12:
-            eps *= 2
-            p = tr.query_ball_point(x = pointcloud, r = eps, workers = -1)
-            i = 0
-            print(eps)
-        i = i+1
-    print(np.size(p[:]))
-    i = 0
-    sum_2 = 0
-    while i < np.size(p):
-        count = np.size(p[i])
-        j = 0
-        sum = 0
-        #TODO remove loop and calculate directly for every j 
-        #proposal: (maybe not the best way)
-        #ball_indices = p[i]
-        #ball_points = pointcloud[ball_indices]
-        #dists = np.linalg.norm(pointcloud[i]-ballpoints, axis = 1)
-        #sum = np.sum([bumb_func(dists[i]/eps) for i in range(len(dists))])
-        #now it might be even possible to also skip the outer loop
-        while j < count:
-            p_j = pointcloud[p[i][j]]
-            diff = np.subtract(pointcloud[i],p_j)
-            if(np.linalg.norm(diff, 2)> eps): print("wrong calc:", np.linalg.norm(diff, 2))# return 
-            sum += bump_func(np.linalg.norm(diff, 2)/eps)
-            j += 1
-        #print(sum)
-        w[i] = c_eps / sum 
-        #print(w[i])
-        sum_2 += w[i]
-        
-        #print(w[i])
-        i = i + 1
-        #if(i%1000 == 0): print(np.size(p[i+250]), i) #print(i)
-    w = w/sum_2
-    print(np.sum(w))
-    print(w)
+    while any(len(ball) < 12 for ball in p):
+        eps *= 2
+        p = tr.query_ball_point(x = pointcloud, r = eps, workers = -1)
+    print("scaled eps:",eps)
+    j = 0
+    
+    while j < np.size(p):
+        ball_indices = p[j]
+        ball_points = pointcloud[ball_indices]
+        dists = np.linalg.norm(pointcloud[j]-ball_points, axis = 1)
+        sum = np.sum([bump_func(dists[i]/eps) for i in range(len(dists))])
+        w[j] = c_eps/sum
+        j += 1
+    
+    w = w/np.sum(w)
+    
     return w
 
 
