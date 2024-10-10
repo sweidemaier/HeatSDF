@@ -4,6 +4,7 @@ SIREN based Learning for Implicit Distance Estimation
 # Usage:
 
 ### Conda-Environment:
+See environment.yml, or manually install:
 - conda install pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=11.0 -c pytorch
 - conda install pyyaml
 - conda install tensorboard
