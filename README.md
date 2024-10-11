@@ -19,8 +19,3 @@ To change between heat/ 2nd- step change in config/recon/create_neural_field.yam
 - change in category input desired parameters (for heat: epsilon and tau, for 2nd-step: net-paths and other parameters)
   
 Then run "python train_heat.py" or "python train_with_normalfield.py"
-
-### Some open corrections
-- table tex file
-
-
