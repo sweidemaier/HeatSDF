@@ -1,6 +1,8 @@
 # SLIDE
 SIREN based Learning for Implicit Distance Estimation
 
+for a set of learned examples see https://uni-bonn.sciebo.de/s/2bm4GhZpzHAzsq7
+
 # Usage:
 
 ### Conda-Environment:
