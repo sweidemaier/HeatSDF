@@ -16,8 +16,8 @@ See environment.yml, or manually install:
 
 
 ### Training:
-To change between heat/ 2nd- step change in config/recon/create_neural_field.yaml: 
-- in the category  trainer - type - trainers.w_normf_trainer or trainers.heat_trainer, where heat_trainer corresponds to the heat flow learning and w_normf_trainer corresponds to the SDF learning using the input normalfield from step 1
+To change between heat/ 2nd- step change in config/recon/NeuralSDFs.yaml: 
+- in the category  trainer - type - trainers.Points2SDF or trainers.Points2unsignedDF
 - change in category input desired parameters (for heat: epsilon and tau, for 2nd-step: net-paths and other parameters)
   
-Then run "python train_heat.py" or "python train_with_normalfield.py"
+Then run "python train_heat.py" or "python train_SDF.py"
