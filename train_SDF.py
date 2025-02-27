@@ -1,7 +1,6 @@
 import os
 import yaml
 import time
-import torch
 import argparse
 import importlib
 import os.path as osp
@@ -10,10 +9,10 @@ from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
 from utils import load_imf
 import numpy as np
+from torch.utils.data import DataLoader
 import csv
-from trainers.utils.new_utils import tens
 from trainers.helper import comp_weights
-from notebooks import evaluation_surfaces
+from notebooks import error_evals
 
 def get_args():
     # command line args
@@ -39,7 +38,7 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open("/home/weidemaier/PDE Net/NFGP/configs/recon/NeuralSDFs3.yaml", 'r') as f:
+    with open("/home/weidemaier/PDE Net/NFGP/configs/recon/NeuralSDFs.yaml", 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
@@ -47,7 +46,7 @@ def get_args():
     # Currently save dir and log_dir are the same
     if not hasattr(config, "log_dir"):
         #  Create log_name
-        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/NeuralSDFs3.yaml"))[0]
+        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/NeuralSDFs.yaml"))[0]
         run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
         post_fix = hparam_str + run_time
 
@@ -65,7 +64,7 @@ def get_args():
 def main_worker(cfg, args):
     # basic setup
     cudnn.benchmark = True
-    
+    logname = cfg.log_name
     writer = SummaryWriter(log_dir=cfg.log_name)
     trainer_lib = importlib.import_module(cfg.trainer.type)
     trainer = trainer_lib.Trainer(cfg, args)
@@ -89,6 +88,7 @@ def main_worker(cfg, args):
     duration_meter = AverageMeter("Duration")
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
+    ### load input points
     with open(cfg.input.point_path) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         file = open(cfg.input.point_path)
@@ -106,34 +106,37 @@ def main_worker(cfg, args):
                 points[line_count-1] = [a, b]
                 if (cfg.models.decoder.dim == 3):
                     points[line_count-1] = [a, b, c]
-                line_count += 1 
-        
+                line_count += 1  
+    ###normalize points, st. they are in [-1, 1]    
     points -= np.mean(points, axis=0, keepdims=True)
-
     coord_max = np.amax(points)
     coord_min = np.amin(points)
     points = (points - coord_min) / (coord_max - coord_min)
     points -= 0.5
     points *= 2.    
     points = np.float32(points)
-    #weights = np.loadtxt("most_recent_weights.out", delimiter=",")
-    #weights = torch.tensor(weights)
-    #weights = comp_weights(points,cfg.input.parameters.epsilon, cfg.models.decoder.dim)
-    weights = 1/line_count*torch.ones(line_count -1,1)
-    #np.savetxt('most_recent_weights.out', weights, delimiter=",")
 
+    train_dataloader = DataLoader(points, shuffle=True, batch_size=5000, pin_memory=True)
+    ### load networks
+    near_path = cfg.input.near_path
+    far_path = cfg.input.far_path
+    near_net,_ = load_imf(near_path, return_cfg=False) #, ckpt_fpath = near_path)# + "/best.pt")
+    far_net,_ = load_imf(far_path, return_cfg=False) #, ckpt_fpath = far_path)# + "/best.pt")
+    valmin = 2
+    valcount = 0   
     for epoch in range(start_epoch, cfg.trainer.epochs + start_epoch):
-
+        iter_tr = iter(train_dataloader)
         # train for one epoch
         loader_start = time.time()
-        leng = 100
-        for batchnumber in range(100):
+        
+        for batchnumber in range(1000): #range(len(train_dataloader)): #
 
             #print(points.shape)
             loader_duration = time.time() - loader_start
             loader_meter.update(loader_duration)
-            step = batchnumber + leng * epoch + 1
-            logs_info = trainer.update(cfg, weights, points)
+            step = batchnumber + 1000 * epoch + 1
+            #= next(iter_tr).squeeze() #points 
+            logs_info = trainer.update(cfg, input_points = points , near_net = near_net, far_net = far_net, epoch = epoch, step = step)
             
             if step % int(cfg.viz.log_freq) == 0 and int(cfg.viz.log_freq) > 0:
                 duration = time.time() - start_time
@@ -141,7 +144,7 @@ def main_worker(cfg, args):
                 start_time = time.time()
                 print("Epoch %d Batch [%2d/%2d] Time [%3.2fs] Loading [%3.2fs]"
                       " Loss %2.5f"
-                      % (epoch, batchnumber, leng, duration_meter.avg,
+                      % (epoch, batchnumber, 1000, duration_meter.avg,
                          loader_meter.avg, logs_info['loss']))
                 visualize = step % int(cfg.viz.viz_freq) == 0 and \
                             int(cfg.viz.viz_freq) > 0
@@ -151,12 +154,25 @@ def main_worker(cfg, args):
 
             # Reset loader time
             loader_start = time.time()
-        val_loss = trainer.validate(cfg, weights, points, writer, epoch)['loss']
+        val_loss = trainer.validate(cfg, points, near_net, far_net, writer, epoch)['loss']
+        
         if(val_loss < best_val): 
             trainer.save_best_val(epoch, step)
             best_val = val_loss
         trainer.sch.step(val_loss)
-        
+        if(val_loss < valmin): 
+            valmin = val_loss
+            valcount = 0
+        valcount += 1
+        if(cfg.trainer.opt.lr <= 10**(-6)):
+            if (valcount > 10):
+                err1, err2, err3 = error_evals.eval(logname)
+                with open("overview.txt", "a") as f:
+                    f.write(str([logname, err1, err2, err3]))
+                    f.write("\n")
+
+                f = open("overview.txt","r")
+                break
         # Save first so that even if the visualization bugged,
         # we still have something
         if (epoch + 1) % int(cfg.viz.save_freq) == 0 and \
@@ -165,12 +181,18 @@ def main_worker(cfg, args):
 
         if (epoch + 1) % int(cfg.viz.val_freq) == 0 and \
                 int(cfg.viz.val_freq) > 0:
-            val_info = trainer.validate(cfg, weights, points, writer,  epoch=epoch)
+            val_info = trainer.validate(cfg, points, near_net, far_net, writer, epoch)
             
 
         # Signal the trainer to cleanup now that an epoch has ended
         trainer.epoch_end(epoch, writer=writer)
+        
         #print("Current learning rate: ", opt.param_groups[0]["lr"])
+    err1, err2, err3 = error_evals.eval(logname)
+    with open("overview.txt", "a") as f:
+        f.write(logname, err1, err2, err3)
+
+    f = open("overview.txt","r")
     trainer.save(epoch=epoch, step=step)
     writer.close()
 
