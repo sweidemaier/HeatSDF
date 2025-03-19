@@ -1,0 +1,61 @@
+!!python/object:argparse.Namespace
+data: !!python/object:argparse.Namespace
+  num_workers: 4
+  path: your_shape_sdf.npy
+  train: !!python/object:argparse.Namespace
+    batch_size: 5000
+    length: 10000
+    num_sample_points: 1000
+  type: datasets.single_shape_sdf_datasets
+  val: !!python/object:argparse.Namespace
+    batch_size: 50000
+    length: 50
+    num_sample_points: 10000
+input: !!python/object:argparse.Namespace
+  far_path: /home/weidemaier/PDE Net/NFGP/logs/NeuralSDFs_2025-Mar-16-16-42-06
+  near_path: /home/weidemaier/PDE Net/NFGP/logs/NeuralSDFs_2025-Mar-16-16-44-15
+  parameters: !!python/object:argparse.Namespace
+    bs: 15000
+    epsilon: 0.001
+    eta: 1
+    factors:
+    - 10
+    - 1
+    - 1
+    far_cut_off: 1
+    inner_radius: 0.15
+    near_cut_off: 1
+    param1: '100'
+    param2: '150'
+    tau: 0.005
+  point_path: /home/weidemaier/PDE Net/NFGP/recon benchmark set/lordquas.csv
+models: !!python/object:argparse.Namespace
+  decoder: !!python/object:argparse.Namespace
+    dim: 3
+    hidden_size: 256
+    n_blocks: 4
+    out_dim: 1
+    type: models.siren_mlp
+step_wise_incr: '0'
+trainer: !!python/object:argparse.Namespace
+  epochs: 50
+  grad_norm_num_points: 10000
+  grad_norm_weight: 1e-2
+  ndf_loss_weight: 0.0
+  opt: !!python/object:argparse.Namespace
+    beta1: 0.9
+    beta2: 0.999
+    lr: 0.0001
+    momentum: 0.9
+    scheduler: adaptive
+    step_epoch: 8
+    type: adam
+    weight_decay: 0.0
+  sdf_loss_weight: 1.0
+  seed: 100
+  type: trainers.Points2SDF #unsignedDF #SDF
+viz: !!python/object:argparse.Namespace
+  log_freq: 10
+  save_freq: 1
+  val_freq: 1
+  viz_freq: 100000
