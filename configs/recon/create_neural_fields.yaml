@@ -1,0 +1,52 @@
+data:
+  type: datasets.single_shape_sdf_datasets
+  num_workers: 4
+  path: your_shape_sdf.npy # place holder
+  train:
+    length: 10000
+    batch_size: 5000
+    num_sample_points: 1000
+  val:
+    length: 50
+    batch_size: 10000
+    num_sample_points: 10000
+
+viz:
+  log_freq: 10
+  viz_freq: 100000
+  save_freq: 1
+  val_freq: 1
+
+trainer:
+  type: trainers.HeatFlowonNeuralSDF # #2D_plate_generalization #KLwithexplsol # #KLwithexplsol # #Isometric_Deformations
+  epochs: 50
+  seed: 100
+  ndf_loss_weight: 0.
+  sdf_loss_weight: 1.
+  grad_norm_weight: 1e-2
+  grad_norm_num_points: 10000
+  opt:
+    type: 'adam'
+    lr: 0.001 #0.0001
+    beta1: 0.9
+    beta2: 0.999
+    momentum: 0.9  # for SGD
+    weight_decay: 0.
+    scheduler: adaptive #step #adaptive
+    step_epoch: 8
+
+models:
+  decoder:
+    arch: [150,'elu', 150,'elu', 150,'elu', 150,'elu']
+    approach: "exact"
+    bc: ["no", "comp_FEM"] #"simpl_sup"
+    neural_path: "/home/weidemaier/PDE Net/logs/NeuralSDFs_2025-Mar-12-19-09-49/"
+    edge_l: 1
+    force: ["circ", 1]
+    lapl: true
+    band_width: 0.5
+    dim: 3
+    out_dim: 1
+    type: trainers.Points2SDF
+
+
