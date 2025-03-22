@@ -11,10 +11,11 @@ from utils import load_imf
 import numpy as np
 from torch.utils.data import DataLoader
 import csv
-from trainers.helper import comp_weights
+from trainers.helper import comp_weights, comp_heat_gradients
 from notebooks import error_evals
 from notebooks import error_utils
 from trainers.InsideOutside import inside_outside
+
 def get_args():
     # command line args
     parser = argparse.ArgumentParser(
@@ -116,16 +117,16 @@ def main_worker(cfg, args):
     points -= 0.5
     points *= 2.    
     points = np.float32(points)
-    inner, outer = inside_outside(points, grid_size = 16)
-    print("inside_outside succesfull")
-    #inner, outer = error_utils.gt_inner_outer("/home/weidemaier/PDE Net/centered_mesh.obj") #"/home/weidemaier/PDE Net/NFGP/headA_centered.obj")
-    #"/home/weidemaier/PDE Net/NFGP/Armadillo.obj"
+    inner, outer, occ = inside_outside(points, grid_size = 16)
+    #inner, outer, _ = inside_outside(occ, grid_size = 32)
     train_dataloader = DataLoader(points, shuffle=True, batch_size=5000, pin_memory=True)
     ### load networks
     near_path = cfg.input.near_path
     far_path = cfg.input.far_path
     near_net,_ = load_imf(near_path, return_cfg=False) #, ckpt_fpath = near_path)# + "/best.pt")
     far_net,_ = load_imf(far_path, return_cfg=False) #, ckpt_fpath = far_path)# + "/best.pt")
+    n_inner, n_outer = comp_heat_gradients(inner, outer, near_net, far_net, gamma = 500)
+    
     valmin = 2
     valcount = 0   
     for epoch in range(start_epoch, cfg.trainer.epochs + start_epoch):
@@ -140,7 +141,7 @@ def main_worker(cfg, args):
             loader_meter.update(loader_duration)
             step = batchnumber + 1000 * epoch + 1
             #= next(iter_tr).squeeze() #points 
-            logs_info = trainer.update(cfg, input_points = points , near_net = near_net, far_net = far_net, epoch = epoch, step = step, gt_inner = inner, gt_outer = outer)
+            logs_info = trainer.update(cfg, input_points = points , near_net = near_net, far_net = far_net, epoch = epoch, step = step, gt_inner = inner, gt_outer = outer, n_inner = n_inner, n_outer = n_outer)
             
             if step % int(cfg.viz.log_freq) == 0 and int(cfg.viz.log_freq) > 0:
                 duration = time.time() - start_time
@@ -158,7 +159,7 @@ def main_worker(cfg, args):
 
             # Reset loader time
             loader_start = time.time()
-        val_loss = trainer.validate(cfg, points, near_net, far_net, writer, epoch)['loss']
+        val_loss = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer)['loss']
         
         if(val_loss < best_val): 
             trainer.save_best_val(epoch, step)
@@ -185,7 +186,7 @@ def main_worker(cfg, args):
 
         if (epoch + 1) % int(cfg.viz.val_freq) == 0 and \
                 int(cfg.viz.val_freq) > 0:
-            val_info = trainer.validate(cfg, points, near_net, far_net, writer, epoch)
+            val_info = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer)
             
 
         # Signal the trainer to cleanup now that an epoch has ended
