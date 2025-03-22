@@ -18,6 +18,8 @@ def inside_outside(point_cloud, grid_size = 32):
     # Compute bounding box
     min_bounds = point_cloud.min(axis=0) - np.array([1.,1.,1.])
     max_bounds = point_cloud.max(axis=0) + np.array([1.,1.,1.])
+    min_bounds = np.array([-1.2, -1.2, -1.2])
+    max_bounds = np.array([1.2, 1.2, 1.2])
     bbox_size = max_bounds - min_bounds
 
     # Define grid step
@@ -75,11 +77,13 @@ def inside_outside(point_cloud, grid_size = 32):
     inside_coords = np.array(np.where(inside)).T
     occupied_coords = np.array(np.where(grid == 1)).T
     outside_coords = np.array(np.where(outside)).T
-
+    
     # Convert grid indices to real coordinates (voxel centers)
+    print(grid_step/2)
     inside_real = inside_coords * grid_step + min_bounds + grid_step/2.
-    occupied_real = occupied_coords * grid_step + min_bounds + grid_step/2.
+    occupied_real = occupied_coords * grid_step + min_bounds + grid_step/2. 
     outside_real = outside_coords * grid_step + min_bounds + grid_step/2.
     np.savetxt("gt_inner.csv", inside_real, delimiter = ",", header = "x,y,z")
     np.savetxt("gt_outer.csv", outside_real , delimiter = ",", header = "x,y,z")
-    return inside_real, outside_real
+    np.savetxt("occupado.csv", occupied_real , delimiter = ",", header = "x,y,z")
+    return inside_real, outside_real, occupied_real
