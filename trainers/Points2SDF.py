@@ -35,7 +35,7 @@ class Trainer(BaseTrainer):
         os.makedirs(osp.join(cfg.save_dir, "images"), exist_ok=True)
         os.makedirs(osp.join(cfg.save_dir, "checkpoints"), exist_ok=True)
         
-    def update(self,  cfg, input_points, near_net, far_net, epoch, step,gt_inner, gt_outer, n_inner, n_outer, *args, **kwargs):
+    def update(self,  cfg, input_points, near_net, far_net, epoch, step,gt_inner, gt_outer, n_inner, n_outer, surf = False, *args, **kwargs):
         if (epoch == 0):
             if(step == 1):
                 print("init")
@@ -54,18 +54,25 @@ class Trainer(BaseTrainer):
         input_points = tens(input_points)
         factor = cfg.input.parameters.factors
         gamma = 500
-        def eta(x, delta= 0.0005):
+        def eta(x, delta= np.float32(cfg.input.parameters.param2)):
             vec = (1/4)*(x/(delta) + 2*torch.torch.ones_like(x))*(x/(delta) - torch.ones_like(x))**2
             vec = torch.where(x <= -(delta)*torch.ones_like(x),  torch.ones_like(x), vec)
             vec = torch.where(x > (delta)*torch.ones_like(x), torch.zeros_like(x), vec)
             return vec.view(x.shape[0], 1)
         def beta(x, kappa):
+            x = x/kappa
             vec = torch.where(x <= torch.zeros_like(x),  torch.zeros_like(x), -2*x**3 + 3*x**2)
-            vec = torch.where(x > torch.ones_like(x), torch.zeros_like(x), vec)
+            vec = torch.where(x > torch.ones_like(x), torch.ones_like(x), vec)
             return vec
+        def arctan(x):
+            return (torch.arctan(-150*x)+torch.pi/2)/torch.pi
+        
         if (dims == 3):
             ### sample points
             xyz = tens(np.random.uniform(-domain_bound, domain_bound, (bs, 3)))
+            #if (surf != False):
+            #xyz = tens(surf)
+            #bs = xyz.shape[0]
             ### function values
             u = self.net(xyz)
             u_zero = self.net(input_points)
@@ -73,10 +80,13 @@ class Trainer(BaseTrainer):
             grad_u = gradient(u, xyz)
             grad_u_near = gradient(near_net(xyz), xyz)
             grad_u_far = gradient(far_net(xyz), xyz)
-            
+            u_near = near_net(xyz)
             ### sort normals
             weight = eta(u)
-            grad_blend = eta(torch.norm(grad_u_near, dim = -1) - gamma, delta = 0.1).view(bs, 1)*grad_u_far + (1-eta(torch.norm(grad_u_near, dim = -1) - gamma, delta = 0.1).view(bs, 1))*grad_u_near
+
+            #print(beta(u_near, kappa = 25))
+            #print("weight", weight)
+            grad_blend = (1-beta(u_near, kappa = 25))*grad_u_far + (beta(u_near, kappa = 25))*grad_u_near
             n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
             normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
             
@@ -88,14 +98,21 @@ class Trainer(BaseTrainer):
             grad_inner = gradient(self.net(gt_inner), gt_inner)
             grad_outer = gradient(self.net(gt_outer), gt_outer)
             
-            inner_loss = torch.norm(grad_inner + n_inner, dim = -1)
-            outer_loss = torch.norm(grad_outer - n_outer, dim = -1)
+            inner_loss = torch.norm(grad_inner - n_inner, dim = -1)
+            outer_loss = torch.norm(grad_outer + n_outer, dim = -1)
             bd_loss =  outer_loss.mean() + inner_loss.mean()
+            
+            ### boundary loss alternative:
+            #inner = self.net(gt_inner)
+            #outer = self.net(gt_outer)
+            #inner_loss = arctan(inner) #eta(-inner, 0.0375)
+            #outer_loss = arctan(-outer)#eta(outer, 0.0375)
+            #bd_loss =  outer_loss.mean() + inner_loss.mean()
             
             
         scale = np.float32(cfg.input.parameters.param1)
-           
-        loss = scale*factor[0]*(u_zero_squared.mean()) + factor[1]*normal_alignment.mean() + factor[2]* bd_loss 
+
+        loss = scale*factor[0]*(u_zero_squared.mean())  + factor[2]* bd_loss + factor[1]*normal_alignment.mean()
         
         if not no_update:
             loss.backward()
@@ -107,6 +124,7 @@ class Trainer(BaseTrainer):
             'scalar/surface': u_zero_squared.mean().detach().cpu().item(),
             'scalar/normal_alignement': normal_alignment.mean().detach().cpu().item(),
             'scalar/loss': loss.detach().mean().cpu().item(),
+            'scalar/bd_loss': bd_loss.detach().cpu().item(),
             
         }
 
@@ -149,11 +167,16 @@ class Trainer(BaseTrainer):
         input_points = tens(input_points)
         factor = cfg.input.parameters.factors
         gamma = 500
-        def eta(x, delta= 0.005):
+        def eta(x, delta= np.float32(cfg.input.parameters.param2)):
             vec = (1/4)*(x/(delta) + 2*torch.torch.ones_like(x))*(x/(delta) - torch.ones_like(x))**2
             vec = torch.where(x <= -(delta)*torch.ones_like(x),  torch.ones_like(x), vec)
             vec = torch.where(x > (delta)*torch.ones_like(x), torch.zeros_like(x), vec)
             return vec.view(x.shape[0], 1)
+        def beta(x, kappa):
+            x = x/kappa
+            vec = torch.where(x <= torch.zeros_like(x),  torch.zeros_like(x), -2*x**3 + 3*x**2)
+            vec = torch.where(x > torch.ones_like(x), torch.ones_like(x), vec)
+            return vec
         
         if (dims == 3):
             ### sample points
@@ -165,13 +188,13 @@ class Trainer(BaseTrainer):
             grad_u = gradient(u, xyz)
             grad_u_near = gradient(near_net(xyz), xyz)
             grad_u_far = gradient(far_net(xyz), xyz)
-            
+            u_near = near_net(xyz)
             ### sort normals
-            weight_1 = eta(u)
-            weight_2 = 1-eta(u)
-            grad_blend = eta(torch.norm(grad_u_near, dim = -1) - gamma, delta = 500).view(bs, 1)*grad_u_far + (1-eta(torch.norm(grad_u_near, dim = -1) - gamma, delta = 500).view(bs, 1))*grad_u_near
+            weight = eta(u)
+
+            grad_blend = beta(u_near, kappa = 25)*grad_u_far + (1-beta(u_near, kappa = 25))*grad_u_near
             n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
-            normal_alignment = (weight_1 * torch.norm(grad_u - n, dim = -1).view(bs, 1) + weight_2 * torch.norm(grad_u + n, dim = -1).view(bs, 1))
+            normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
             
             ### boundary values
             gt_inner = tens(gt_inner)
@@ -180,16 +203,16 @@ class Trainer(BaseTrainer):
             n_outer = tens(n_outer)
             grad_inner = gradient(self.net(gt_inner), gt_inner)
             grad_outer = gradient(self.net(gt_outer), gt_outer)
-            inner_loss = torch.norm(grad_inner - n_inner, dim = -1)
-            outer_loss = torch.norm(grad_outer + n_outer, dim = -1)
+            
+            inner_loss = torch.norm(grad_inner + n_inner, dim = -1)
+            outer_loss = torch.norm(grad_outer - n_outer, dim = -1)
             bd_loss =  outer_loss.mean() + inner_loss.mean()
-            
-            
             
             
         scale = np.float32(cfg.input.parameters.param1)
            
         loss = scale*factor[0]*(u_zero_squared.mean()) + factor[1]*normal_alignment.mean() + factor[2]* bd_loss 
+        
         
         writer.add_scalar('train/val_loss', loss.detach().cpu().item(), epoch)
         return {

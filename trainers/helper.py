@@ -6,12 +6,18 @@ from trainers.utils.new_utils import tens
 from trainers.utils.diff_ops import gradient
 import torch
 
-def eta(x, delta= 500):
+def eta(x, delta= 0.1):
     vec = (1/4)*(x/(delta) + 2*torch.torch.ones_like(x))*(x/(delta) - torch.ones_like(x))**2
     vec = torch.where(x <= -(delta)*torch.ones_like(x),  torch.ones_like(x), vec)
     vec = torch.where(x > (delta)*torch.ones_like(x), torch.zeros_like(x), vec)
     return vec.view(x.shape[0], 1)
-             
+
+def beta(x, kappa):
+    x = x/kappa
+    vec = torch.where(x <= torch.zeros_like(x),  torch.zeros_like(x), -2*x**3 + 3*x**2)
+    vec = torch.where(x > torch.ones_like(x), torch.ones_like(x), vec)
+    return vec
+
 def bump_func(x):
         if (abs(x) > 1):
             return 0
@@ -61,11 +67,32 @@ def comp_heat_gradients(gt_inner, gt_outer, near_net, far_net, gamma):
     grad_far_inner = gradient(far_net(gt_inner), gt_inner)
     grad_far_outer = gradient(far_net(gt_outer), gt_outer)
     
-    n_inner = eta(torch.norm(grad_near_inner, dim = -1) - gamma).view(inner_size, 1)*grad_far_inner + (1-eta(torch.norm(grad_near_inner, dim = -1) - gamma).view(inner_size, 1))*grad_near_inner
-    n_inner = n_inner/torch.norm(n_inner, dim = -1).view(inner_size, 1)
+    u_near_inner = near_net(gt_inner)
+    u_near_outer = near_net(gt_outer)
 
-    n_outer = eta(torch.norm(grad_near_outer, dim = -1) - gamma).view(outer_size, 1)*grad_far_outer + (1-eta(torch.norm(grad_near_outer, dim = -1) - gamma).view(outer_size, 1))*grad_near_outer
+    n_inner = (1-beta(u_near_inner, kappa = 25))*grad_far_inner + (beta(u_near_inner, kappa = 25))*grad_near_inner
+    n_inner = n_inner/torch.norm(n_inner, dim = -1).view(inner_size, 1)
+    n_outer = (1-beta(u_near_outer, kappa = 25))*grad_far_outer + (beta(u_near_outer, kappa = 25))*grad_near_outer
     n_outer = n_outer/torch.norm(n_outer, dim = -1).view(outer_size, 1)
     n_outer = n_outer.detach().cpu().numpy()
     n_inner = n_inner.detach().cpu().numpy()
     return n_inner, n_outer
+
+'''gt_outer = tens(gt_outer)
+    gt_inner = tens(gt_inner)
+    outer_size = gt_outer.shape[0]
+    inner_size = gt_inner.shape[0]
+   
+    grad_near_inner = gradient(near_net(gt_inner), gt_inner)
+    grad_near_outer = gradient(near_net(gt_outer), gt_outer)
+    grad_far_inner = gradient(far_net(gt_inner), gt_inner)
+    grad_far_outer = gradient(far_net(gt_outer), gt_outer)
+    
+    n_inner = beta(torch.norm(grad_near_inner, dim = -1), kappa = 500).view(inner_size, 1)*grad_far_inner + (1-beta(torch.norm(grad_near_inner, dim = -1), kappa = 500).view(inner_size, 1))*grad_near_inner
+    n_inner = n_inner/torch.norm(n_inner, dim = -1).view(inner_size, 1)
+
+    n_outer = beta(torch.norm(grad_near_outer, dim = -1), kappa = 500).view(outer_size, 1)*grad_far_outer + (1-beta(torch.norm(grad_near_outer, dim = -1), kappa = 500).view(outer_size, 1))*grad_near_outer
+    n_outer = n_outer/torch.norm(n_outer, dim = -1).view(outer_size, 1)
+    n_outer = n_outer.detach().cpu().numpy()
+    n_inner = n_inner.detach().cpu().numpy()
+    return n_inner, n_outer'''
