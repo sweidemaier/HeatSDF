@@ -50,7 +50,7 @@ class Trainer(BaseTrainer):
         weights = tens(weights)
         input_points = tens(input_points)
         if (dims == 3):
-            xyz = tens(np.random.uniform(-1.5, 1.5, (bs, 3)))
+            xyz = tens(np.random.uniform(-1.2, 1.2, (bs, 3)))
             
             u = self.net(xyz)
             u_squared = torch.square(u)
@@ -110,7 +110,7 @@ class Trainer(BaseTrainer):
         weights = tens(weights)
         input_points = tens(input_points)
         if (dims == 3):
-            xyz = tens(np.random.uniform(-1.5, 1.5, (bs, 3)))
+            xyz = tens(np.random.uniform(-1.2, 1.2, (bs, 3)))
             
             u = self.net(xyz)
             u_squared = torch.square(u)

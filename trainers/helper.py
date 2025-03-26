@@ -27,9 +27,7 @@ def bump_func(x):
 def comp_weights(pointcloud, epsilon, dim = 2 ):
     start = time.time()
     w = np.zeros(np.shape(pointcloud)[0])
-    c = integral.quad(bump_func, -1, 1)
-    
-    c_eps = c[0]*(epsilon**dim)
+
     #c_eps = (epsilon**dim)
     tr = tree.cKDTree(pointcloud)
     
@@ -40,15 +38,15 @@ def comp_weights(pointcloud, epsilon, dim = 2 ):
         r *= 2
 
         p = tr.query_ball_point(x = pointcloud, r = r, workers = -1)
-    
+    c_eps = (r**dim)
     j = 0
     print("scaled eps:",r)
     while j < np.size(p):
         ball_indices = p[j]
         ball_points = pointcloud[ball_indices]
         dists = np.linalg.norm(pointcloud[j]-ball_points, axis = 1)
-        sum = np.sum([bump_func(dists[i]/r) for i in range(len(dists))])
-        w[j] = c_eps/sum
+        sum = 1/c_eps*np.sum([bump_func(dists[i]/r) for i in range(len(dists))])
+        w[j] = 1/sum
 
         j += 1
     
@@ -56,9 +54,9 @@ def comp_weights(pointcloud, epsilon, dim = 2 ):
     print("Total computation time:", time.time() - start)
     return w
 
-def comp_heat_gradients(gt_inner, gt_outer, near_net, far_net, gamma):
-    gt_outer = tens(gt_outer)
-    gt_inner = tens(gt_inner)
+def comp_heat_gradients(gt_inner, gt_outer, near_net, far_net, kappa):
+    #gt_outer = tens(gt_outer)
+    #gt_inner = tens(gt_inner)
     outer_size = gt_outer.shape[0]
     inner_size = gt_inner.shape[0]
    
@@ -70,12 +68,13 @@ def comp_heat_gradients(gt_inner, gt_outer, near_net, far_net, gamma):
     u_near_inner = near_net(gt_inner)
     u_near_outer = near_net(gt_outer)
 
-    n_inner = (1-beta(u_near_inner, kappa = 25))*grad_far_inner + (beta(u_near_inner, kappa = 25))*grad_near_inner
+    n_inner = (1-beta(u_near_inner, kappa))*grad_far_inner + (beta(u_near_inner, kappa))*grad_near_inner
     n_inner = n_inner/torch.norm(n_inner, dim = -1).view(inner_size, 1)
-    n_outer = (1-beta(u_near_outer, kappa = 25))*grad_far_outer + (beta(u_near_outer, kappa = 25))*grad_near_outer
+    n_outer = (1-beta(u_near_outer, kappa))*grad_far_outer + (beta(u_near_outer, kappa))*grad_near_outer
     n_outer = n_outer/torch.norm(n_outer, dim = -1).view(outer_size, 1)
-    n_outer = n_outer.detach().cpu().numpy()
-    n_inner = n_inner.detach().cpu().numpy()
+    n_outer = n_outer.detach()
+    n_inner = n_inner.detach()
+    
     return n_inner, n_outer
 
 '''gt_outer = tens(gt_outer)

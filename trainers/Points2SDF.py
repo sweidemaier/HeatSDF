@@ -35,7 +35,7 @@ class Trainer(BaseTrainer):
         os.makedirs(osp.join(cfg.save_dir, "images"), exist_ok=True)
         os.makedirs(osp.join(cfg.save_dir, "checkpoints"), exist_ok=True)
         
-    def update(self,  cfg, input_points, near_net, far_net, epoch, step,gt_inner, gt_outer, n_inner, n_outer, surf = False, *args, **kwargs):
+    def update(self,  cfg, input_points, near_net, far_net, epoch, step,gt_inner, gt_outer, n_inner, n_outer, kappa, *args, **kwargs):
         if (epoch == 0):
             if(step == 1):
                 print("init")
@@ -86,28 +86,28 @@ class Trainer(BaseTrainer):
 
             #print(beta(u_near, kappa = 25))
             #print("weight", weight)
-            grad_blend = (1-beta(u_near, kappa = 25))*grad_u_far + (beta(u_near, kappa = 25))*grad_u_near
+            grad_blend = (1-beta(u_near, kappa))*grad_u_far + (beta(u_near, kappa))*grad_u_near
             n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
             normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
             
             ### boundary values
-            gt_inner = tens(gt_inner)
-            gt_outer = tens(gt_outer)
-            n_inner = tens(n_inner)
-            n_outer = tens(n_outer)
-            grad_inner = gradient(self.net(gt_inner), gt_inner)
-            grad_outer = gradient(self.net(gt_outer), gt_outer)
+            #gt_inner = tens(gt_inner)
+            #gt_outer = tens(gt_outer)
+            #n_inner = torch.tensor(n_inner).cuda()
+            #n_outer = torch.tensor(n_outer).cuda()
+            #grad_inner = gradient(self.net(gt_inner), gt_inner)
+            #grad_outer = gradient(self.net(gt_outer), gt_outer)
             
-            inner_loss = torch.norm(grad_inner - n_inner, dim = -1)
-            outer_loss = torch.norm(grad_outer + n_outer, dim = -1)
-            bd_loss =  outer_loss.mean() + inner_loss.mean()
-            
-            ### boundary loss alternative:
-            #inner = self.net(gt_inner)
-            #outer = self.net(gt_outer)
-            #inner_loss = arctan(inner) #eta(-inner, 0.0375)
-            #outer_loss = arctan(-outer)#eta(outer, 0.0375)
+            #inner_loss = torch.norm(grad_inner - n_inner, dim = -1)
+            #outer_loss = torch.norm(grad_outer + n_outer, dim = -1)
             #bd_loss =  outer_loss.mean() + inner_loss.mean()
+
+            ### boundary loss alternative:
+            inner = self.net(gt_inner)
+            outer = self.net(gt_outer)
+            inner_loss = eta(-inner, 0.01)
+            outer_loss = eta(outer, 0.01)
+            bd_loss =  outer_loss.mean() + inner_loss.mean()
             
             
         scale = np.float32(cfg.input.parameters.param1)
@@ -160,7 +160,7 @@ class Trainer(BaseTrainer):
                     mesh.export(osp.join(self.cfg.save_dir, "val", save_name))
                     mesh.export(osp.join(self.cfg.save_dir, "latest_mesh.obj"))
 
-    def validate(self, cfg, input_points, near_net, far_net, writer, epoch, gt_inner, gt_outer,n_inner, n_outer, *args, **kwargs):
+    def validate(self, cfg, input_points, near_net, far_net, writer, epoch, gt_inner, gt_outer,n_inner, n_outer, kappa, *args, **kwargs):
         domain_bound = 1.2
         bs = cfg.input.parameters.bs
         dims = cfg.models.decoder.dim 
@@ -181,6 +181,9 @@ class Trainer(BaseTrainer):
         if (dims == 3):
             ### sample points
             xyz = tens(np.random.uniform(-domain_bound, domain_bound, (bs, 3)))
+            #if (surf != False):
+            #xyz = tens(surf)
+            #bs = xyz.shape[0]
             ### function values
             u = self.net(xyz)
             u_zero = self.net(input_points)
@@ -192,26 +195,25 @@ class Trainer(BaseTrainer):
             ### sort normals
             weight = eta(u)
 
-            grad_blend = beta(u_near, kappa = 25)*grad_u_far + (1-beta(u_near, kappa = 25))*grad_u_near
+            #print(beta(u_near, kappa = 25))
+            #print("weight", weight)
+            grad_blend = (1-beta(u_near, kappa))*grad_u_far + (beta(u_near, kappa))*grad_u_near
             n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
             normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
             
             ### boundary values
-            gt_inner = tens(gt_inner)
-            gt_outer = tens(gt_outer)
-            n_inner = tens(n_inner)
-            n_outer = tens(n_outer)
-            grad_inner = gradient(self.net(gt_inner), gt_inner)
-            grad_outer = gradient(self.net(gt_outer), gt_outer)
-            
-            inner_loss = torch.norm(grad_inner + n_inner, dim = -1)
-            outer_loss = torch.norm(grad_outer - n_outer, dim = -1)
+            inner = self.net(gt_inner)
+            outer = self.net(gt_outer)
+            inner_loss = eta(-inner, 0.01)
+            outer_loss = eta(outer, 0.01)
             bd_loss =  outer_loss.mean() + inner_loss.mean()
             
             
+            
+            
         scale = np.float32(cfg.input.parameters.param1)
-           
-        loss = scale*factor[0]*(u_zero_squared.mean()) + factor[1]*normal_alignment.mean() + factor[2]* bd_loss 
+
+        loss = scale*factor[0]*(u_zero_squared.mean())  + factor[2]* bd_loss + factor[1]*normal_alignment.mean()
         
         
         writer.add_scalar('train/val_loss', loss.detach().cpu().item(), epoch)
