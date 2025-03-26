@@ -41,7 +41,7 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open("/home/weidemaier/PDE Net/NFGP/configs/recon/NeuralSDFs3.yaml", 'r') as f:
+    with open("/home/weidemaier/PDE Net/NFGP/configs/recon/NeuralSDFs.yaml", 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
@@ -49,7 +49,7 @@ def get_args():
     # Currently save dir and log_dir are the same
     if not hasattr(config, "log_dir"):
         #  Create log_name
-        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/NeuralSDFs3.yaml"))[0]
+        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/NeuralSDFs.yaml"))[0]
         run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
         post_fix = hparam_str + run_time
 
