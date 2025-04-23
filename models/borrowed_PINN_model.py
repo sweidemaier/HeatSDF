@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from trainers import analyticSDFs
+#from trainers import analyticSDFs
 torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
 
@@ -88,5 +88,5 @@ class DR(nn.Module):
 
         # broadcast over all five fields
         u = out * trial_func[:, None] 
-        
+        print("testing if we are here")
         return u

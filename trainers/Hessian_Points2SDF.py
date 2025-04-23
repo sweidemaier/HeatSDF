@@ -2,7 +2,7 @@ import os
 import torch
 import os.path as osp
 import importlib
-from trainers.utils.diff_ops import gradient
+from trainers.utils.diff_ops import gradient, hessian
 from trainers.utils.vis_utils import imf2mesh
 from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
@@ -101,7 +101,26 @@ class Trainer(BaseTrainer):
             outer_loss = eta(outer, 0.0005)
             bd_loss =  outer_loss.mean() + inner_loss.mean()
 
-        loss = lamda[0]*u_zero_squared.mean()  + lamda[1]*normal_alignment.mean()+ lamda[2]* bd_loss
+            ### Hessian
+            xyz_hess = xyz.unsqueeze(0)
+            hess,_ = hessian(self.net(xyz_hess), xyz_hess)
+            hess = hess.reshape(bs,3,3)
+            
+            singular_hess = torch.abs(torch.det(hess))
+            L2_hess = torch.norm(hess, p = "fro",dim = (1,2))**2
+            if(epoch < 5):
+                betha = 10**(-2)
+                gamma = 10**(-2)
+            elif (epoch < 10):
+                betha = 10**(-4)
+                gamma = 10**(-4)
+            elif (epoch < 20):
+                betha = 10**(-6)
+                gamma = 10**(-6)
+            else:
+                betha = 0
+                gamma = 0
+        loss = lamda[0]*u_zero_squared.mean()  + lamda[1]*normal_alignment.mean()+ lamda[2]* bd_loss + betha * (singular_hess.mean() + gamma*L2_hess.mean())
         
         if not no_update:
             loss.backward()
@@ -114,6 +133,8 @@ class Trainer(BaseTrainer):
             'scalar/normal_alignement': normal_alignment.mean().detach().cpu().item(),
             'scalar/loss': loss.detach().mean().cpu().item(),
             'scalar/bd_loss': bd_loss.detach().cpu().item(),
+            'beta': betha,
+            'gamma': gamma
             
         }
 

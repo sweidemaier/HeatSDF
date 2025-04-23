@@ -1,19 +1,17 @@
 import os
 import yaml
 import time
-import torch
 import argparse
 import importlib
 import os.path as osp
 from utils import AverageMeter, dict2namespace, update_cfg_hparam_lst
 from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
-from utils import load_imf
 import numpy as np
 import csv
-from trainers.utils.new_utils import tens
 from trainers.helper import comp_weights
-from notebooks import evaluation_surfaces
+import torch
+
 
 def get_args():
     # command line args
@@ -39,25 +37,22 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open("/home/weidemaier/PDE Net/NFGP/configs/recon/NeuralSDFs.yaml", 'r') as f:
+    with open("/home/weidemaier/HeatSDF/configs/recon/NeuralSDFs.yaml", 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
+    
+    #  Create log_name
+    run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
+    logname = config.log_name
+    config.log_name = "logs/" + logname + "/heat_step"
+    config.save_dir = "logs/" + logname + "/heat_step"
+    config.log_dir = "logs/" + logname + "/heat_step"
 
-    # Currently save dir and log_dir are the same
-    if not hasattr(config, "log_dir"):
-        #  Create log_name
-        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/NeuralSDFs.yaml"))[0]
-        run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
-        post_fix = hparam_str + run_time
+    os.makedirs(osp.join(config.log_dir, 'config'))
+    with open(osp.join(config.log_dir, "config", "config.yaml"), "w") as outf:
+        yaml.dump(config, outf)
 
-        config.log_name = "logs/%s_%s" % (cfg_file_name, post_fix)
-        config.save_dir = "logs/%s_%s" % (cfg_file_name, post_fix)
-        config.log_dir = "logs/%s_%s" % (cfg_file_name, post_fix)
-
-        os.makedirs(osp.join(config.log_dir, 'config'))
-        with open(osp.join(config.log_dir, "config", "config.yaml"), "w") as outf:
-            yaml.dump(config, outf)
     return args, config
 
 
@@ -107,29 +102,24 @@ def main_worker(cfg, args):
                 if (cfg.models.decoder.dim == 3):
                     points[line_count-1] = [a, b, c]
                 line_count += 1 
-        
-    points -= np.mean(points, axis=0, keepdims=True)
-
-    coord_max = np.amax(points)
-    coord_min = np.amin(points)
-    points = (points - coord_min) / (coord_max - coord_min)
-    points -= 0.5
-    points *= 2.    
+    if(cfg.input.normalize == "scale"):
+        points -= np.mean(points, axis=0, keepdims=True)
+        coord_max = np.amax(points)
+        coord_min = np.amin(points)
+        points = (points - coord_min) / (coord_max - coord_min)
+        points -= 0.5
+        points *= 2.    
     points = np.float32(points)
-    #weights = np.loadtxt("most_recent_weights.out", delimiter=",")
-    #weights = torch.tensor(weights)
     weights = comp_weights(points,cfg.input.parameters.epsilon, cfg.models.decoder.dim)
-    #weights = 1/line_count*torch.ones(line_count -1,1)
-    #np.savetxt('most_recent_weights.out', weights, delimiter=",")
+    #np.savetxt('heat_weights.out', weights, delimiter=",")
+    points = torch.tensor(points).cuda()
+    weights = torch.tensor(np.float32(weights)).cuda()
 
     for epoch in range(start_epoch, cfg.trainer.epochs + start_epoch):
-
         # train for one epoch
         loader_start = time.time()
         leng = 100
         for batchnumber in range(100):
-
-            #print(points.shape)
             loader_duration = time.time() - loader_start
             loader_meter.update(loader_duration)
             step = batchnumber + leng * epoch + 1
@@ -143,12 +133,9 @@ def main_worker(cfg, args):
                       " Loss %2.5f"
                       % (epoch, batchnumber, leng, duration_meter.avg,
                          loader_meter.avg, logs_info['loss']))
-                visualize = step % int(cfg.viz.viz_freq) == 0 and \
-                            int(cfg.viz.viz_freq) > 0
                 trainer.log_train(
                     logs_info,
                     writer=writer, epoch=epoch, step=step, visualize=False)
-
             # Reset loader time
             loader_start = time.time()
         val_loss = trainer.validate(cfg, weights, points, writer, epoch)['loss']
@@ -156,21 +143,15 @@ def main_worker(cfg, args):
             trainer.save_best_val(epoch, step)
             best_val = val_loss
         trainer.sch.step(val_loss)
-        
         # Save first so that even if the visualization bugged,
         # we still have something
         if (epoch + 1) % int(cfg.viz.save_freq) == 0 and \
                 int(cfg.viz.save_freq) > 0:
             trainer.save(epoch=epoch, step=step)
-
-        if (epoch + 1) % int(cfg.viz.val_freq) == 0 and \
-                int(cfg.viz.val_freq) > 0:
-            val_info = trainer.validate(cfg, weights, points, writer,  epoch=epoch)
             
 
         # Signal the trainer to cleanup now that an epoch has ended
         trainer.epoch_end(epoch, writer=writer)
-        #print("Current learning rate: ", opt.param_groups[0]["lr"])
     trainer.save(epoch=epoch, step=step)
     writer.close()
 

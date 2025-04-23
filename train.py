@@ -9,9 +9,8 @@ from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
 from utils import load_imf, load_imf_PDE
 import numpy as np
-import trimesh
 import csv
-#from trainers import load_siren_sdf
+from trainers.helper import comp_weights
 
 def get_args():
     # command line args
@@ -37,7 +36,7 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open("/home/weidemaier/PDE Net/NFGP/configs/recon/create_neural_fields.yaml", 'r') as f:
+    with open("/home/weidemaier/HeatSDF/configs/PDE/PDE_on_surface.yaml", 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
@@ -45,7 +44,7 @@ def get_args():
     # Currently save dir and log_dir are the same
     if not hasattr(config, "log_dir"):
         #  Create log_name
-        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/create_neural_fields.yaml"))[0]
+        cfg_file_name = os.path.splitext(os.path.basename("configs/PDE/PDE_on_surface.yaml"))[0]
         run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
         post_fix = hparam_str + run_time
 
@@ -63,7 +62,6 @@ def get_args():
 def main_worker(cfg, args):
     # basic setup
     cudnn.benchmark = True
-    #mesh = trimesh.load("/home/weidemaier/PDE Net/NFGP/comparisonFEM_mesh.obj")
     
     writer = SummaryWriter(log_dir=cfg.log_name)
     trainer_lib = importlib.import_module(cfg.trainer.type)
@@ -71,7 +69,7 @@ def main_worker(cfg, args):
 
     start_epoch = 0
     start_time = time.time()
-    path = cfg.models.decoder.neural_path
+    path = cfg.input.parameters.Surface_net
     if (path != "None"):
             phi_func,_ = load_imf(path, return_cfg=False, ckpt_fpath = path + "/best.pt") 
     else: phi_func = None
@@ -87,35 +85,11 @@ def main_worker(cfg, args):
         trainer.save(epoch=-1, step=-1)
         val_info = trainer.validate(epoch=-1)
 
-    ### load input points
-    with open("/home/weidemaier/PDE Net/NFGP/head_fixed.csv") as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        file = open("/home/weidemaier/PDE Net/NFGP/head_fixed.csv")
-        count = len(file.readlines()) -1
-        points = [None]*count
-        line_count = 0
-        for row in csv_reader:
-            if (line_count == 0):
-                line_count += 1
-            else:
-                a = float(row[0])
-                b = float(row[1])
-                if (cfg.models.decoder.dim == 3):
-                    c = float(row[2])
-                points[line_count-1] = [a, b]
-                if (cfg.models.decoder.dim == 3):
-                    points[line_count-1] = [a, b, c]
-                line_count += 1  
-    ###normalize points, st. they are in [-1, 1]    
-    points -= np.mean(points, axis=0, keepdims=True)
-    coord_max = np.amax(points)
-    coord_min = np.amin(points)
-    points = (points - coord_min) / (coord_max - coord_min)
-    points -= 0.5
-    points *= 2.    
-    points = np.float32(points)
-    path = "/home/weidemaier/PDE Net/NFGP/logs/create_neural_fields_2025-Mar-13-11-28-00"
-    func_net, _ = load_imf_PDE(path,return_cfg=False)
+    path = cfg.input.parameters.Neural_input_function
+    if(path != "None"):
+        func_net, _ = load_imf_PDE(path,return_cfg=False)
+    else:
+        func_net = 0
     # main training loop
     print("Start epoch: %d End epoch: %d" % (start_epoch, cfg.trainer.epochs + start_epoch))
     step = 0
@@ -129,18 +103,10 @@ def main_worker(cfg, args):
         loader_start = time.time()
         leng = 100
         for batchnumber in range(100):
-            #ind = trimesh.sample.sample_surface_even(mesh, cfg.data.train.batch_size)
-            #i = 0
-            #points = [None]*cfg.data.train.batch_size
-            #while i < cfg.data.train.batch_size:
-            #    points[i] = mesh.vertices[i]
-            #    i+=1
-            
-            #print(points.shape)
             loader_duration = time.time() - loader_start
             loader_meter.update(loader_duration)
             step = batchnumber + leng * epoch + 1
-            logs_info = trainer.update(cfg, writer, epoch, phi_func, points, func_net)#, points)
+            logs_info = trainer.update(cfg, writer, epoch, phi_func, func_net)
             
             if step % int(cfg.viz.log_freq) == 0 and int(cfg.viz.log_freq) > 0:
                 duration = time.time() - start_time
@@ -158,7 +124,7 @@ def main_worker(cfg, args):
 
             # Reset loader time
             loader_start = time.time()
-        val_loss = trainer.validate(cfg, writer, epoch, phi_func, points, func_net)['loss']
+        val_loss = trainer.validate(cfg, writer, epoch, phi_func, func_net)['loss']
         if(val_loss < best_val): 
             trainer.save_best_val(epoch, step)
             best_val = val_loss
@@ -172,12 +138,11 @@ def main_worker(cfg, args):
 
         if (epoch + 1) % int(cfg.viz.val_freq) == 0 and \
                 int(cfg.viz.val_freq) > 0:
-            val_info = trainer.validate(cfg, writer, epoch, phi_func, points, func_net)
+            val_info = trainer.validate(cfg, writer, epoch, phi_func, func_net)
             
 
         # Signal the trainer to cleanup now that an epoch has ended
         trainer.epoch_end(epoch, writer=writer)
-        #print("Current learning rate: ", opt.param_groups[0]["lr"])
     trainer.save(epoch=epoch, step=step)
     writer.close()
 

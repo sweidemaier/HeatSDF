@@ -1,18 +1,6 @@
 import numpy as np
-#import plotly.graph_objects as go
-from scipy.ndimage import label
+import torch
 
-'''# Increase number of points to get a more continuous sphere surface
-np.random.seed(42)
-num_points = 5000
-theta = np.random.uniform(0, 2 * np.pi, num_points)
-phi = np.random.uniform(0, np.pi, num_points)
-r = np.ones(num_points)  # Points on unit sphere
-x = r * np.sin(phi) * np.cos(theta)
-y = r * np.sin(phi) * np.sin(theta)
-z = r * np.cos(phi)
-point_cloud = np.column_stack((x, y, z))
-'''
 def inside_outside(point_cloud, grid_size = 32):
     ###
     # Compute bounding box
@@ -86,4 +74,81 @@ def inside_outside(point_cloud, grid_size = 32):
     np.savetxt("gt_inner.csv", inside_real, delimiter = ",", header = "x,y,z")
     np.savetxt("gt_outer.csv", outside_real , delimiter = ",", header = "x,y,z")
     np.savetxt("occupado.csv", occupied_real , delimiter = ",", header = "x,y,z")
+    return inside_real, outside_real, occupied_real
+
+
+def inside_outside_torch(point_cloud, grid_size=32, bounds=None):
+    """
+    Args:
+        point_cloud: (N, 3) torch tensor (cuda) of points
+        grid_size: size of voxel grid per axis
+        bounds: (min_bound, max_bound) as tuples or tensors
+    Returns:
+        inside_real, outside_real, occupied_real: real-space voxel center coordinates
+    """
+    assert point_cloud.is_cuda, "Input point cloud must be on CUDA"
+
+    device = point_cloud.device
+    dtype = point_cloud.dtype
+
+    # Compute bounding box
+    if bounds is None:
+        min_bounds = torch.tensor([-1.2, -1.2, -1.2], device=device, dtype=dtype)
+        max_bounds = torch.tensor([1.2, 1.2, 1.2], device=device, dtype=dtype)
+    else:
+        min_bounds, max_bounds = bounds
+
+    bbox_size = max_bounds - min_bounds
+    grid_step = bbox_size / (grid_size - 1)
+
+    def get_grid_index(points):
+        return torch.clamp(((points - min_bounds) / grid_step).long(), 0, grid_size - 1)
+
+    # Create occupancy grid
+    grid = torch.zeros((grid_size, grid_size, grid_size), dtype=torch.bool, device=device)
+    indices = get_grid_index(point_cloud)
+    grid[indices[:, 0], indices[:, 1], indices[:, 2]] = True
+
+    # Flood fill from boundary
+    outside = torch.zeros_like(grid)
+    visited = torch.zeros_like(grid)
+
+    # Get 6-neighbors
+    neighbors = torch.tensor([
+        [1, 0, 0], [-1, 0, 0],
+        [0, 1, 0], [0, -1, 0],
+        [0, 0, 1], [0, 0, -1]
+    ], device=device)
+
+    # Initialize queue with all boundary cells
+    queue = []
+    for i in range(grid_size):
+        for j in range(grid_size):
+            for k in [0, grid_size-1]:
+                for x, y, z in [(i, j, k), (i, k, j), (k, i, j)]:
+                    if not grid[x, y, z] and not visited[x, y, z]:
+                        visited[x, y, z] = True
+                        outside[x, y, z] = True
+                        queue.append((x, y, z))
+
+    while queue:
+        x, y, z = queue.pop()
+        for dx, dy, dz in neighbors:
+            nx, ny, nz = x + dx.item(), y + dy.item(), z + dz.item()
+            if 0 <= nx < grid_size and 0 <= ny < grid_size and 0 <= nz < grid_size:
+                if not visited[nx, ny, nz] and not grid[nx, ny, nz]:
+                    visited[nx, ny, nz] = True
+                    outside[nx, ny, nz] = True
+                    queue.append((nx, ny, nz))
+
+    # Inside = not occupied and not outside
+    inside = (~grid) & (~outside)
+
+    def to_world(coords):
+        return coords * grid_step + min_bounds + grid_step / 2.
+
+    inside_real = to_world(inside.nonzero(as_tuple=False).float())
+    outside_real = to_world(outside.nonzero(as_tuple=False).float())
+    occupied_real = to_world(grid.nonzero(as_tuple=False).float())
+
     return inside_real, outside_real, occupied_real

@@ -12,9 +12,11 @@ import numpy as np
 from torch.utils.data import DataLoader
 import csv
 from trainers.utils.new_utils import tens
-from trainers.helper import comp_weights, comp_heat_gradients
-from notebooks import error_evals
-from notebooks import error_utils
+from trainers.helper import comp_heat_gradients 
+from trainers.helper import inside_outside_torch
+
+
+
 from trainers.InsideOutside import inside_outside
 import torch
 def get_args():
@@ -41,25 +43,22 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open("/home/weidemaier/PDE Net/NFGP/configs/recon/NeuralSDFs.yaml", 'r') as f:
+    with open("/home/weidemaier/HeatSDF/configs/recon/NeuralSDFs.yaml", 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
 
-    # Currently save dir and log_dir are the same
-    if not hasattr(config, "log_dir"):
-        #  Create log_name
-        cfg_file_name = os.path.splitext(os.path.basename("configs/recon/NeuralSDFs.yaml"))[0]
-        run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
-        post_fix = hparam_str + run_time
+    #  Create log_name
+    run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
+    logname = config.log_name
+    config.log_name = "logs/" + logname + "/SDF_step"
+    config.save_dir = "logs/" + logname + "/SDF_step"
+    config.log_dir = "logs/" + logname + "/SDF_step"
 
-        config.log_name = "logs/%s_%s" % (cfg_file_name, post_fix)
-        config.save_dir = "logs/%s_%s" % (cfg_file_name, post_fix)
-        config.log_dir = "logs/%s_%s" % (cfg_file_name, post_fix)
+    os.makedirs(osp.join(config.log_dir, 'config'))
+    with open(osp.join(config.log_dir, "config", "config.yaml"), "w") as outf:
+        yaml.dump(config, outf)
 
-        os.makedirs(osp.join(config.log_dir, 'config'))
-        with open(osp.join(config.log_dir, "config", "config.yaml"), "w") as outf:
-            yaml.dump(config, outf)
     return args, config
 
 
@@ -111,26 +110,27 @@ def main_worker(cfg, args):
                     points[line_count-1] = [a, b, c]
                 line_count += 1  
     ###normalize points, st. they are in [-1, 1]    
-    points -= np.mean(points, axis=0, keepdims=True)
-    coord_max = np.amax(points)
-    coord_min = np.amin(points)
-    points = (points - coord_min) / (coord_max - coord_min)
-    points -= 0.5
-    points *= 2.    
-    points = np.float32(points)
-    inner, outer, occ = inside_outside(points, grid_size = 64) # np.float32(cfg.input.parameters.param1).astype(int))
-    inner = tens(inner)
-    outer = tens(outer)
+    if(cfg.input.normalize == "scale"):
+        points -= np.mean(points, axis=0, keepdims=True)
+        coord_max = np.amax(points)
+        coord_min = np.amin(points)
+        points = (points - coord_min) / (coord_max - coord_min)
+        points -= 0.5
+        points *= 2.    
+    points = torch.tensor(np.float32(points)).cuda()
+    inner, outer, occ = inside_outside_torch(points, grid_size = cfg.input.parameters.box_count, dilate=True) 
+    inner.requires_grad_(True)
+    outer.requires_grad_(True)
     #train_dataloader = DataLoader(points, shuffle=True, batch_size=5000, pin_memory=True)
     ### load networks
-    near_path = cfg.input.near_path
-    far_path = cfg.input.far_path
-    near_net,_ = load_imf(near_path, return_cfg=False) #, ckpt_fpath = near_path)# + "/best.pt")
-    kappa = (4/5)*near_net(torch.tensor(np.float32(np.random.uniform(-1.2, 1.2, (10000,3)))).cuda()).max().cpu().detach().numpy()
-    print("kappa", kappa)
-    far_net,_ = load_imf(far_path, return_cfg=False) #, ckpt_fpath = far_path)# + "/best.pt")
+    near_net,cfg_near = load_imf(cfg.input.near_path, return_cfg=False)
+    kappa = (3/5)*near_net(occ).max().cpu().detach().numpy()
+    print(cfg.input.far_path )
+    if (cfg.input.far_path != "None"):
+        far_net,_ = load_imf(cfg.input.far_path, return_cfg=False)
+    else: far_net = None
     n_inner, n_outer = comp_heat_gradients(inner, outer, near_net, far_net, kappa)
-    
+
     valmin = 2
     valcount = 0   
     for epoch in range(start_epoch, cfg.trainer.epochs + start_epoch):
@@ -145,7 +145,7 @@ def main_worker(cfg, args):
             loader_meter.update(loader_duration)
             step = batchnumber + 1000 * epoch + 1
             #= next(iter_tr).squeeze() #points 
-            logs_info = trainer.update(cfg, input_points = points , near_net = near_net, far_net = far_net, epoch = epoch, step = step, gt_inner = inner, gt_outer = outer, n_inner = n_inner, n_outer = n_outer, kappa = kappa)
+            logs_info = trainer.update(cfg, input_points = points , near_net = near_net, far_net = far_net, epoch = epoch, step = step, gt_inner = inner, gt_outer = outer, kappa = kappa, box_points = occ)
             
             if step % int(cfg.viz.log_freq) == 0 and int(cfg.viz.log_freq) > 0:
                 duration = time.time() - start_time
@@ -163,7 +163,7 @@ def main_worker(cfg, args):
 
             # Reset loader time
             loader_start = time.time()
-        val_loss = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer, kappa)['loss']
+        val_loss = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer, kappa, box_points = occ)['loss']
         
         if(val_loss < best_val): 
             trainer.save_best_val(epoch, step)
@@ -175,12 +175,12 @@ def main_worker(cfg, args):
         valcount += 1
         if(cfg.trainer.opt.lr <= 10**(-6)):
             if (valcount > 10):
-                err1, err2, err3 = error_evals.eval(logname)
-                with open("overview.txt", "a") as f:
-                    f.write(str([logname, err1, err2, err3]))
-                    f.write("\n")
+                #err1, err2, err3 = error_evals.eval(logname)
+                #with open("overview.txt", "a") as f:
+                #    f.write(str([logname, err1, err2, err3]))
+                #    f.write("\n")
 
-                f = open("overview.txt","r")
+                #f = open("overview.txt","r")
                 break
         # Save first so that even if the visualization bugged,
         # we still have something
@@ -190,18 +190,18 @@ def main_worker(cfg, args):
 
         if (epoch + 1) % int(cfg.viz.val_freq) == 0 and \
                 int(cfg.viz.val_freq) > 0:
-            val_info = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer, kappa)
+            val_info = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer, kappa, box_points = occ)
             
 
         # Signal the trainer to cleanup now that an epoch has ended
         trainer.epoch_end(epoch, writer=writer)
         
         #print("Current learning rate: ", opt.param_groups[0]["lr"])
-    err1, err2, err3 = error_evals.eval(logname)
-    with open("overview.txt", "a") as f:
-        f.write(logname, err1, err2, err3)
-
-    f = open("overview.txt","r")
+    #err1, err2, err3 = error_evals.eval(logname)
+    #with open("overview.txt", "a") as f:
+    #    f.write(logname, err1, err2, err3)
+#
+    #f = open("overview.txt","r")
     trainer.save(epoch=epoch, step=step)
     writer.close()
 

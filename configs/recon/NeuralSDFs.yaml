@@ -3,7 +3,7 @@ data: !!python/object:argparse.Namespace
   num_workers: 4
   path: your_shape_sdf.npy
   train: !!python/object:argparse.Namespace
-    batch_size: 5000
+    batch_size: 10000
     length: 10000
     num_sample_points: 1000
   type: datasets.single_shape_sdf_datasets
@@ -12,23 +12,25 @@ data: !!python/object:argparse.Namespace
     length: 50
     num_sample_points: 10000
 input: !!python/object:argparse.Namespace
-  far_path: /home/weidemaier/PDE Net/NFGP/logs/NeuralSDFs_2025-Mar-16-16-42-06
-  near_path: /home/weidemaier/PDE Net/NFGP/logs/NeuralSDFs_2025-Mar-16-16-44-15
+  far_path: /home/weidemaier/HeatSDF/logs/SDF2025-Apr-23-10-54-46/heat_step
+  near_path: /home/weidemaier/HeatSDF/logs/SDF2025-Apr-23-10-54-46/heat_step
+  normalize: scale
   parameters: !!python/object:argparse.Namespace
-    bs: 15000
+    box_count: 64
+    bs: 5000
+    delta: '0.005'
+    domain_bound: 1.2
     epsilon: 0.001
     eta: 1
-    factors:
-    - 10
+    lamda:
+    - 100
     - 1
     - 1
-    far_cut_off: 1
-    inner_radius: 0.15
-    near_cut_off: 1
-    param1: '100'
-    param2: '150'
+    sampling: boxes
     tau: 0.005
-  point_path: /home/weidemaier/PDE Net/NFGP/recon benchmark set/lordquas.csv
+  point_path: /home/weidemaier/HeatSDF/recon benchmark/lordquas_uniform.csv
+log_dir: SDF2025-Apr-23-10-54-46
+log_name: SDF2025-Apr-23-10-54-46
 models: !!python/object:argparse.Namespace
   decoder: !!python/object:argparse.Namespace
     dim: 3
@@ -53,7 +55,7 @@ trainer: !!python/object:argparse.Namespace
     weight_decay: 0.0
   sdf_loss_weight: 1.0
   seed: 100
-  type: trainers.Points2unsignedDF #SDF
+  type: trainers.Hessian_Points2SDF
 viz: !!python/object:argparse.Namespace
   log_freq: 10
   save_freq: 1

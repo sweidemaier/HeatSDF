@@ -36,7 +36,6 @@ class Trainer(BaseTrainer):
         os.makedirs(osp.join(cfg.save_dir, "checkpoints"), exist_ok=True)
         
     def update(self,  cfg, weights, input_points,  *args, **kwargs):
-    
         if 'no_update' in kwargs:
             no_update = kwargs['no_update']
         else:
@@ -47,19 +46,18 @@ class Trainer(BaseTrainer):
         bs = cfg.input.parameters.bs
         dims = cfg.models.decoder.dim 
         tau = np.float32(cfg.input.parameters.tau)
-        weights = tens(weights)
-        input_points = tens(input_points)
+        domain_bound = cfg.input.parameters.domain_bound
+        input_bs = input_points.shape[0]
         if (dims == 3):
-            xyz = tens(np.random.uniform(-1.2, 1.2, (bs, 3)))
+            xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
             
             u = self.net(xyz)
             u_squared = torch.square(u)
             u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
             
             u_input = self.net(input_points)
-            val = weights.view(u_input.shape[0], 1)*(2*u_input.view(u_input.shape[0], 1)-torch.ones(u_input.shape[0],1).cuda())
-            prod = torch.sum(val)
-            
+            val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
+            prod = torch.sum(val)     
         loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
         if not no_update:
             loss.backward()
@@ -107,19 +105,18 @@ class Trainer(BaseTrainer):
         bs = cfg.input.parameters.bs
         dims = cfg.models.decoder.dim 
         tau = np.float32(cfg.input.parameters.tau)
-        weights = tens(weights)
-        input_points = tens(input_points)
+        domain_bound = cfg.input.parameters.domain_bound
+        input_bs = input_points.shape[0]
         if (dims == 3):
-            xyz = tens(np.random.uniform(-1.2, 1.2, (bs, 3)))
+            xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
             
             u = self.net(xyz)
             u_squared = torch.square(u)
             u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
             
             u_input = self.net(input_points)
-            val = weights.view(u_input.shape[0], 1)*(2*u_input.view(u_input.shape[0], 1)-torch.ones(u_input.shape[0],1).cuda())
-            prod = torch.sum(val)
-            
+            val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
+            prod = torch.sum(val)     
         loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
         writer.add_scalar('train/val_loss', loss.detach().cpu().item(), epoch)
         return {
