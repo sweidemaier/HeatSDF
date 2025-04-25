@@ -120,9 +120,8 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False):
     assert point_cloud.is_cuda, "Input point cloud must be on CUDA"
 
     device = point_cloud.device
-    dtype = torch.float32 
+    dtype = torch.float32
 
-    # Compute bounding box
     if bounds is None:
         min_bounds = torch.tensor([-1.2, -1.2, -1.2], device=device, dtype=dtype)
         max_bounds = torch.tensor([1.2, 1.2, 1.2], device=device, dtype=dtype)
@@ -132,64 +131,48 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False):
     bbox_size = max_bounds - min_bounds
     grid_step = bbox_size / (grid_size - 1)
 
-    def get_grid_index(points):
-        return torch.clamp(((points - min_bounds) / grid_step).long(), 0, grid_size - 1)
+    # Compute voxel indices
+    indices = torch.clamp(((point_cloud - min_bounds) / grid_step).long(), 0, grid_size - 1)
 
-    # Create occupancy grid
+    # Occupancy grid
     grid = torch.zeros((grid_size, grid_size, grid_size), dtype=torch.bool, device=device)
-    indices = get_grid_index(point_cloud)
     grid[indices[:, 0], indices[:, 1], indices[:, 2]] = True
 
-    # === DILATE OCCUPIED VOXELS === #
-    if dilate:
-        dilated_grid = grid.clone()
-        neighbors = torch.tensor([
-            [1, 0, 0], [-1, 0, 0],
-            [0, 1, 0], [0, -1, 0],
-            [0, 0, 1], [0, 0, -1]
-        ], device=device)
-
-        occ_coords = grid.nonzero(as_tuple=False)
-        for offset in neighbors:
-            neighbor_coords = occ_coords + offset
-            # Clamp to valid indices
-            valid_mask = ((neighbor_coords >= 0) & (neighbor_coords < grid_size)).all(dim=1)
-            neighbor_coords = neighbor_coords[valid_mask]
-            dilated_grid[neighbor_coords[:, 0], neighbor_coords[:, 1], neighbor_coords[:, 2]] = True
-
-        grid = dilated_grid
-
-    # Flood fill from boundary
-    outside = torch.zeros_like(grid)
+    # === FLOOD FILL FOR OUTSIDE === #
     visited = torch.zeros_like(grid)
+    outside = torch.zeros_like(grid)
 
-    # 6-connected neighbors
+    boundary_mask = torch.zeros_like(grid)
+    boundary_mask[0, :, :] = boundary_mask[-1, :, :] = 1
+    boundary_mask[:, 0, :] = boundary_mask[:, -1, :] = 1
+    boundary_mask[:, :, 0] = boundary_mask[:, :, -1] = 1
+
+    boundary_start = (~grid) & boundary_mask
+    queue = boundary_start.nonzero(as_tuple=False)
+    visited[queue[:, 0], queue[:, 1], queue[:, 2]] = True
+    outside[queue[:, 0], queue[:, 1], queue[:, 2]] = True
+
+    # BFS flood fill using queue
     neighbors = torch.tensor([
         [1, 0, 0], [-1, 0, 0],
         [0, 1, 0], [0, -1, 0],
         [0, 0, 1], [0, 0, -1]
     ], device=device)
 
-    # Initialize queue with all boundary cells
-    queue = []
-    for i in range(grid_size):
-        for j in range(grid_size):
-            for k in [0, grid_size-1]:
-                for x, y, z in [(i, j, k), (i, k, j), (k, i, j)]:
-                    if not grid[x, y, z] and not visited[x, y, z]:
-                        visited[x, y, z] = True
-                        outside[x, y, z] = True
-                        queue.append((x, y, z))
-
-    while queue:
-        x, y, z = queue.pop()
-        for dx, dy, dz in neighbors:
-            nx, ny, nz = x + dx.item(), y + dy.item(), z + dz.item()
-            if 0 <= nx < grid_size and 0 <= ny < grid_size and 0 <= nz < grid_size:
-                if not visited[nx, ny, nz] and not grid[nx, ny, nz]:
-                    visited[nx, ny, nz] = True
-                    outside[nx, ny, nz] = True
-                    queue.append((nx, ny, nz))
+    while queue.numel() > 0:
+        current = queue
+        queue = []
+        for offset in neighbors:
+            neighbor_coords = current + offset
+            mask = ((neighbor_coords >= 0) & (neighbor_coords < grid_size)).all(dim=1)
+            neighbor_coords = neighbor_coords[mask]
+            x, y, z = neighbor_coords[:, 0], neighbor_coords[:, 1], neighbor_coords[:, 2]
+            new_mask = (~visited[x, y, z]) & (~grid[x, y, z])
+            visited[x[new_mask], y[new_mask], z[new_mask]] = True
+            outside[x[new_mask], y[new_mask], z[new_mask]] = True
+            queue.append(neighbor_coords[new_mask])
+        if queue:
+            queue = torch.cat(queue, dim=0)
 
     # Inside = not occupied and not outside
     inside = (~grid) & (~outside)
@@ -199,9 +182,30 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False):
 
     inside_real = to_world(inside.nonzero(as_tuple=False).float())
     outside_real = to_world(outside.nonzero(as_tuple=False).float())
+
+    # === DILATION (optional) === #
+    if dilate:
+        # Pad grid for convolution-style dilation
+        kernel = torch.zeros((3, 3, 3), device=device)
+        kernel[1, 1, 0] = kernel[1, 1, 2] = 1
+        kernel[1, 0, 1] = kernel[1, 2, 1] = 1
+        kernel[0, 1, 1] = kernel[2, 1, 1] = 1
+        kernel = kernel[None, None]
+
+        grid_f = grid[None, None].float()  # Convert to float
+
+        for _ in range(2):
+            padded = F.pad(grid_f, (1, 1, 1, 1, 1, 1))
+            dilated = F.conv3d(padded.float(), kernel) > 0
+            grid_f = torch.logical_or(dilated, grid_f).float()
+        grid = grid_f[0, 0] > 0
+
     occupied_real = to_world(grid.nonzero(as_tuple=False).float())
-    np.savetxt("gt_inner.csv", inside_real.detach().cpu().numpy() , delimiter = ",", header = "x,y,z")
-    np.savetxt("gt_outer.csv", outside_real.detach().cpu().numpy() , delimiter = ",", header = "x,y,z")
-    np.savetxt("occupado.csv", occupied_real.detach().cpu().numpy() , delimiter = ",", header = "x,y,z")
+
+    # Save
+    np.savetxt("gt_inner.csv", inside_real.detach().cpu().numpy(), delimiter=",", header="x,y,z")
+    np.savetxt("gt_outer.csv", outside_real.detach().cpu().numpy(), delimiter=",", header="x,y,z")
+    np.savetxt("occupado.csv", occupied_real.detach().cpu().numpy(), delimiter=",", header="x,y,z")
+
     return inside_real, outside_real, occupied_real
 
