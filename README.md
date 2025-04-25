@@ -9,7 +9,7 @@ This repository contains the official code for the paper:
 
 ## 🔥 Overview
 
-**HeatSDF** is a neural framework that reconstructs Signed Distance Functions (SDFs) from **unoriented point clouds** using a novel variational approach based on heat distances. This work introduces a powerful way to learn geometry and topology jointly by leveraging the structure-preserving properties of heat kernels.
+**HeatSDF** is a neural framework that reconstructs Signed Distance Functions (SDFs) from **unoriented point clouds** using a novel variational approach based on heat distances.
 
 ## 🧠 Abstract
 
@@ -24,8 +24,24 @@ To set up the environment:
 ```bash
 conda env create -f HeatSDF_env.yml
 conda activate HeatSDF
+```
+## 🚀 Usage
+To run the complete learning pipeline for both the heat method and SDF reconstruction, execute the following command:
+```
+python run_pipeline.py
+```
+This will start the training process, performing both the heat learning stage (to estimate gradients of the unsigned distance field) and the SDF learning stage (to reconstruct the signed distance function).
 
+If you want to test the method on your own point clouds, simply modify the input paths in the relevant configuration file located in:
 
+```
+config/recon/
+```
+The config file allows you to adjust various settings, including data paths and hyperparameters.
+
+---
+## ✍️ Citation
+If you use this code or ideas from the paper, please cite:
 @article{HeatSDF,
   title={SDFs from Unoriented Point Clouds using Neural Variational Heat Distances},
   author={Weidemaier et al.},
