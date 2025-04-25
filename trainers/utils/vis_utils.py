@@ -18,7 +18,7 @@ def imf2mesh(imf, res=256, threshold=0.0, batch_size = 10000, verbose=True,
         ys[..., np.newaxis],
         xs[..., np.newaxis],
         zs[..., np.newaxis]
-    ], axis=-1).astype(np.float)
+    ], axis=-1).astype(np.float32)
     grid = (grid / float(res - 1) - 0.5) * 2 * bound
     grid = grid.reshape(-1, 3)
     # Grid will be [-1, 1] * bound
