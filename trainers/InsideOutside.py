@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-def inside_outside(point_cloud, grid_size = 32):
+def inside_outside(point_cloud, grid_size = 32): #TODO remove if not used 
     ###
     # Compute bounding box
     min_bounds = point_cloud.min(axis=0) - np.array([1.,1.,1.])
@@ -71,6 +71,7 @@ def inside_outside(point_cloud, grid_size = 32):
     inside_real = inside_coords * grid_step + min_bounds + grid_step/2.
     occupied_real = occupied_coords * grid_step + min_bounds + grid_step/2. 
     outside_real = outside_coords * grid_step + min_bounds + grid_step/2.
+    #TODO Florine should be saved at a reasonable location (or remove saving)
     np.savetxt("gt_inner.csv", inside_real, delimiter = ",", header = "x,y,z")
     np.savetxt("gt_outer.csv", outside_real , delimiter = ",", header = "x,y,z")
     np.savetxt("occupado.csv", occupied_real , delimiter = ",", header = "x,y,z")

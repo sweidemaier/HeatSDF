@@ -21,6 +21,7 @@ class Trainer(BaseTrainer):
         set_random_seed(getattr(self.cfg.trainer, "seed", 666))
 
         lib = importlib.import_module(cfg.models.decoder.type)
+        #TODO Florine Pfad muss anpassbar sein
         iniz_net,_ = load_imf("/home/weidemaier/PDE Net/NFGP/logs/NeuralSDFs_2025-Jan-27-11-37-08", return_cfg=False)
         self.net = iniz_net
         self.net.cuda()
@@ -65,15 +66,15 @@ class Trainer(BaseTrainer):
             vec = torch.where(x > torch.ones(x.shape).cuda(), torch.ones(x.shape).cuda(), vec)
             return vec
 
-        
-        if (dims == 3):
+        #TODO Florine would be nice to rename losses similar to paper
+        if (dims == 3): #TODO Florine remove if 
             ### sample points
             if(cfg.input.parameters.sampling == "primitive"):
                 xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
             elif(cfg.input.parameters.sampling == "boxes"):
                 xyz = sample_points_from_box_midpoints(box_points, box_width, N = bs)
                 xyz.requires_grad_(True)
-            else: print("Sampling strategy not implemented!")
+            else: print("Sampling strategy not implemented!") #TODO Florine end program
             u = self.net(xyz)
             u_zero = self.net(input_points)
             u_zero_squared = torch.square(u_zero)

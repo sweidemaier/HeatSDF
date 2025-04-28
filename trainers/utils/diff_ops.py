@@ -49,6 +49,8 @@ def divergence(y, x):
             y[..., i], x, torch.ones_like(y[..., i]),
             create_graph=True)[0][..., i:i+1]
     return div
+
+#TODO Florine clean function
 def manifold_divergence(y, x, normal, grad_outputs=None):
     div = 0.
     div_n = 0.
@@ -81,6 +83,8 @@ def lapl_beltrami(y,x, normal, grad_outputs=None):
     grad = manifold_gradient(y, x, normal)
     lapl_b = manifold_divergence(grad, x, normal)
     return lapl_b
+
+#TODO Florine clean function
 def manifold_jacobian(y, x, normal, grad_outputs = None):
     """
     Jacobian of y wrt x

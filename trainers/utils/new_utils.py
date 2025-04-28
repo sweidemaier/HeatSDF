@@ -1,12 +1,16 @@
 import numpy as np 
 import torch
 
+#TODO Florine utils sinnvoll sortieren
+
 def tens(input_pt):
     input = np.float32(input_pt)
     output_pt = torch.tensor(input)
     output_pt = output_pt.cuda()
     output_pt.requires_grad = True
     return output_pt
+
+#TODO Florine ?
 def spherical(phi, theta):
     return 0
 

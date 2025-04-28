@@ -5,16 +5,17 @@ import torch
 import tqdm
 from skimage import measure
 from scipy.spatial import cKDTree
-os.chdir("/home/weidemaier/PDE Net/NFGP")
+os.chdir("/home/weidemaier/PDE Net/NFGP") #TODO Florine pfad anpassen
 print(os.getcwd())
 sys.path.insert(0, os.getcwd())
 from trainers.utils.vis_utils import imf2mesh
-from trainers.analyticSDFs import comp_FEM
+from trainers.analyticSDFs import comp_FEM #TODO Florine ??
 from trainers.utils.new_utils import tens
 from trainers.utils.diff_ops import gradient as autograd_gradient
 
 
-# Step 2: Use Marching Cubes to extract the surface of the sphere
+
+# Step 2: Use Marching Cubes to extract the surface of the sphere #TODO Florine ??
 def extract_surface(sdf, res = 30, bound= 1.1, level=0.0):
     """
     Extract the surface (isosurface) of the signed distance function using Marching Cubes.
@@ -202,7 +203,7 @@ def sample(func, res, eps, bound):
     epsilon = eps  # Narrow band thickness
     # Get the uniformly distributed points around the zero-level set
     uniform_points = get_uniform_points(sdf = func, resolution = res, epsilon=eps, bound = bound)
-    np.savetxt("sampling.csv",  uniform_points, delimiter = ",", header = "x,y,z")
+    np.savetxt("sampling.csv",  uniform_points, delimiter = ",", header = "x,y,z") #TODO Florine Pfad 
     return uniform_points
 
 sample(comp_FEM, 30, 0.1, 2.1)

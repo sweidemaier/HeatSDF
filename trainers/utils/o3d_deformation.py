@@ -3,6 +3,8 @@ import numpy as np
 import open3d as o3d
 from trainers.utils.vis_utils import imf2mesh
 
+#TODO Florine brauchst du das ? 
+
 
 def trimesh_to_o3dmesh(mesh):
     o3d_mesh = o3d.geometry.TriangleMesh(

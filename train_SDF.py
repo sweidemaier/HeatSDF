@@ -62,7 +62,6 @@ def get_args():
     return args, config
 
 
-
 def main_worker(cfg, args):
     # basic setup
     cudnn.benchmark = True

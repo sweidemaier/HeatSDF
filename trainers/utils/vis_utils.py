@@ -1,3 +1,4 @@
+#TODO Florine was tun die?
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -9,7 +10,8 @@ import skimage
 import numpy as np
 import skimage.measure
 
-
+#TODO Florine: hast du die Funktion irgendwo her ? Dann kenntlich machen 
+#TODO Florine kurz kommentieren was Funktion macht
 def imf2mesh(imf, res=256, threshold=0.0, batch_size = 10000, verbose=True,
              use_double=False, normalize=False, norm_type='res',
              return_stats=False, bound=1.):
@@ -94,7 +96,7 @@ def make_2d_grid(r, add_noise=False):
     xy = (xy / float(r) - 0.5) * 2
     return xy
 
-
+#TODO Florine kurz kommentieren was Funktion macht
 def imf2img(imf, res=256, add_noise=False, batch_size=10000, threshold=0.,
             verbose=False, grid=None, return_stats=False, bound=1):
     if grid is None:

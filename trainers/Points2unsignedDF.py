@@ -7,10 +7,12 @@ from trainers.utils.vis_utils import imf2mesh
 from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
 from trainers.utils.new_utils import tens
-from models.borrowed_PINN_model import DR
+from models.borrowed_PINN_model import DR #TODO Florine rm
 torch.pi = torch.acos(torch.zeros(1)).item() * 2
 import numpy as np
 from trainers.utils.vis_utils import imf2mesh
+
+#TODO Florine so umbenennen das es eindeutig zu train_heat gehört
 
 class Trainer(BaseTrainer):
 
@@ -48,7 +50,7 @@ class Trainer(BaseTrainer):
         tau = np.float32(cfg.input.parameters.tau)
         domain_bound = cfg.input.parameters.domain_bound
         input_bs = input_points.shape[0]
-        if (dims == 3):
+        if (dims == 3): #TODO abfrage entfernen
             xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
             
             u = self.net(xyz)
@@ -56,6 +58,7 @@ class Trainer(BaseTrainer):
             u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
             
             u_input = self.net(input_points)
+            #TODO FLorine better name than val, prod 
             val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
             prod = torch.sum(val)     
         loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
@@ -107,7 +110,7 @@ class Trainer(BaseTrainer):
         tau = np.float32(cfg.input.parameters.tau)
         domain_bound = cfg.input.parameters.domain_bound
         input_bs = input_points.shape[0]
-        if (dims == 3):
+        if (dims == 3): #TOD0 s.o.
             xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
             
             u = self.net(xyz)
@@ -152,7 +155,7 @@ class Trainer(BaseTrainer):
         self.opt.load_state_dict(ckpt['opt'])
         start_epoch = ckpt['epoch']
         return start_epoch
-
+    #TODO Florine wird das genutzt ? 
     def multi_gpu_wrapper(self, wrapper):
         self.net = wrapper(self.net)
 

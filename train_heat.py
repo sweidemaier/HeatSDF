@@ -67,6 +67,7 @@ def main_worker(cfg, args):
 
     start_epoch = 0
     start_time = time.time()
+    #TODO Florine: benutzt du resume und test_run ? Funktionieren die ? ansonsten einfach weglassen
     if args.resume:
         if args.pretrained is not None:
             start_epoch = trainer.resume(args.pretrained)
@@ -84,6 +85,7 @@ def main_worker(cfg, args):
     duration_meter = AverageMeter("Duration")
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
+    #TODO Florine schöner: eine load_point_cloud funktion in utils hinzufügen, die kannst du dann auch in train_SDF nutzen
     with open(cfg.input.point_path) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         file = open(cfg.input.point_path)
@@ -96,7 +98,7 @@ def main_worker(cfg, args):
             else:
                 a = float(row[0])
                 b = float(row[1])
-                if (cfg.models.decoder.dim == 3):
+                if (cfg.models.decoder.dim == 3): #TODO Florine weglassen, weil jetzt eh 3d
                     c = float(row[2])
                 points[line_count-1] = [a, b]
                 if (cfg.models.decoder.dim == 3):

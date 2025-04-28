@@ -29,6 +29,7 @@ def update_config(param1, create_logdir = False):
         run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
         config.log_dir = "SDF" + run_time
         config.log_name = "SDF" + run_time
+        #TODO Florine: pass the path to this script 
         config.input.near_path= str("/home/weidemaier/HeatSDF/logs/SDF" + run_time + "/heat_step")
         config.input.far_path= str("/home/weidemaier/HeatSDF/logs/SDF" + run_time + "/heat_step")      
     # Write back to the file
