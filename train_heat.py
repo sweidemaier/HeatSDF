@@ -11,6 +11,7 @@ import numpy as np
 import csv
 from trainers.helper import comp_weights
 import torch
+from utils import load_pts
 
 
 def get_args():
@@ -67,51 +68,14 @@ def main_worker(cfg, args):
 
     start_epoch = 0
     start_time = time.time()
-    #TODO Florine: benutzt du resume und test_run ? Funktionieren die ? ansonsten einfach weglassen
-    if args.resume:
-        if args.pretrained is not None:
-            start_epoch = trainer.resume(args.pretrained)
-        else:
-            start_epoch = trainer.resume(cfg.resume.dir)
-
-    # If test run, go through the validation loop first
-    if args.test_run:
-        trainer.save(epoch=-1, step=-1)
-        val_info = trainer.validate(epoch=-1)
-
+    
     # main training loop
     print("Start epoch: %d End epoch: %d" % (start_epoch, cfg.trainer.epochs + start_epoch))
     step = 0
     duration_meter = AverageMeter("Duration")
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
-    #TODO Florine schöner: eine load_point_cloud funktion in utils hinzufügen, die kannst du dann auch in train_SDF nutzen
-    with open(cfg.input.point_path) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        file = open(cfg.input.point_path)
-        count = len(file.readlines()) -1
-        points = [None]*count
-        line_count = 0
-        for row in csv_reader:
-            if (line_count == 0):
-                line_count += 1
-            else:
-                a = float(row[0])
-                b = float(row[1])
-                if (cfg.models.decoder.dim == 3): #TODO Florine weglassen, weil jetzt eh 3d
-                    c = float(row[2])
-                points[line_count-1] = [a, b]
-                if (cfg.models.decoder.dim == 3):
-                    points[line_count-1] = [a, b, c]
-                line_count += 1 
-    if(cfg.input.normalize == "scale"):
-        points -= np.mean(points, axis=0, keepdims=True)
-        coord_max = np.amax(points)
-        coord_min = np.amin(points)
-        points = (points - coord_min) / (coord_max - coord_min)
-        points -= 0.5
-        points *= 2.    
-    points = np.float32(points)
+    points = load_pts(cfg)
     weights = comp_weights(points,cfg.input.parameters.epsilon, cfg.models.decoder.dim)
     #np.savetxt('heat_weights.out', weights, delimiter=",")
     points = torch.tensor(points).cuda()

@@ -3,7 +3,8 @@ import yaml
 import argparse
 import importlib
 import os.path as osp
-
+import numpy as np
+import csv
 #TODO Florine dieses utils file sinnvoll einsortieren
 
 class AverageMeter(object):
@@ -73,7 +74,7 @@ def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
                 last_file = ep2file[epoch]
     print(last_file)
 
-    trainer_lib = importlib.import_module("trainers.Points2unsignedDF")
+    trainer_lib = importlib.import_module("trainers.HeatStep")
     trainer = trainer_lib.Trainer(cfg, None)
     trainer.resume(last_file)
     
@@ -83,6 +84,32 @@ def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
         imf = trainer.net
         del trainer
         return imf, cfg
+
+def load_pts(cfg):
+    with open(cfg.input.point_path) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        file = open(cfg.input.point_path)
+        count = len(file.readlines()) -1
+        points = [None]*count
+        line_count = 0
+        for row in csv_reader:
+            if (line_count == 0):
+                line_count += 1
+            else:
+                a = float(row[0])
+                b = float(row[1])
+                c = float(row[2])
+                points[line_count-1] = [a, b, c]
+                line_count += 1 
+    if(cfg.input.normalize == "scale"):
+        points -= np.mean(points, axis=0, keepdims=True)
+        coord_max = np.amax(points)
+        coord_min = np.amin(points)
+        points = (points - coord_min) / (coord_max - coord_min)
+        points -= 0.5
+        points *= 2.    
+    points = np.float32(points)
+    return points
 
 def parse_hparams(hparam_lst):
     print("=" * 80)

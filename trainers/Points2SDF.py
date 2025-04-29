@@ -66,43 +66,43 @@ class Trainer(BaseTrainer):
             vec = torch.where(x > torch.ones(x.shape).cuda(), torch.ones(x.shape).cuda(), vec)
             return vec
 
-        #TODO Florine would be nice to rename losses similar to paper
-        if (dims == 3): #TODO Florine remove if 
-            ### sample points
-            if(cfg.input.parameters.sampling == "primitive"):
-                xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
-            elif(cfg.input.parameters.sampling == "boxes"):
-                xyz = sample_points_from_box_midpoints(box_points, box_width, N = bs)
-                xyz.requires_grad_(True)
-            else: print("Sampling strategy not implemented!") #TODO Florine end program
-            u = self.net(xyz)
-            u_zero = self.net(input_points)
-            u_zero_squared = torch.square(u_zero)
-            grad_u = gradient(u, xyz)
-            u_near = near_net(xyz)
-            grad_u_near = gradient(u_near, xyz)
-            ### sort normals
-            weight = eta(u)
-            if(far_net != None):
-                u_far = far_net(xyz)
-                grad_u_far = gradient(u_far, xyz)            
-                grad_blend = (1-beta(u_near, kappa))*grad_u_far + (beta(u_near, kappa))*grad_u_near
-                n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
-                normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
-            else:
-                n = grad_u_near/torch.norm(grad_u_near, dim = -1).view(bs, 1)
-                normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
-            
-            ### boundary loss alternative:
-            inner_sample = sample_points_from_box_midpoints(gt_inner, box_width, N = 500)
-            outer_sample = sample_points_from_box_midpoints(gt_outer, box_width, N = 500)
-            inner = self.net(inner_sample)
-            outer = self.net(outer_sample)
-            inner_loss = eta(-inner, 0.0005)
-            outer_loss = eta(outer, 0.0005)
-            bd_loss =  outer_loss.mean() + inner_loss.mean()
+        ### sample points
+        if(cfg.input.parameters.sampling == "primitive"):
+            xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
+        elif(cfg.input.parameters.sampling == "boxes"):
+            xyz = sample_points_from_box_midpoints(box_points, box_width, N = bs)
+            xyz.requires_grad_(True)
+        else: 
+            print("Sampling strategy not implemented!") #TODO Florine end program
+        ### compute function and input-function values
+        u = self.net(xyz)
+        u_zero = self.net(input_points)
+        loss_fit = torch.square(u_zero)
+        grad_u = gradient(u, xyz)
+        u_near = near_net(xyz)
+        grad_u_near = gradient(u_near, xyz)
+        ### sort normals
+        weight = eta(u)
+        if(far_net != None):
+            u_far = far_net(xyz)
+            grad_u_far = gradient(u_far, xyz)            
+            grad_blend = (1-beta(u_near, kappa))*grad_u_far + (beta(u_near, kappa))*grad_u_near
+            n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
+            loss_normal = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
+        else:
+            n = grad_u_near/torch.norm(grad_u_near, dim = -1).view(bs, 1)
+            loss_normal = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
+        
+        ### boundary loss:
+        inner_sample = sample_points_from_box_midpoints(gt_inner, box_width, N = 500)
+        outer_sample = sample_points_from_box_midpoints(gt_outer, box_width, N = 500)
+        inner = self.net(inner_sample)
+        outer = self.net(outer_sample)
+        inner_loss = eta(-inner, 0.0005)
+        outer_loss = eta(outer, 0.0005)
+        loss_boundary =  outer_loss.mean() + inner_loss.mean()
 
-        loss = lamda[0]*u_zero_squared.mean()  + lamda[1]*normal_alignment.mean()+ lamda[2]* bd_loss
+        loss = lamda[0]*loss_fit.mean()  + lamda[1]*loss_normal.mean()+ lamda[2]* loss_boundary
         
         if not no_update:
             loss.backward()
@@ -111,10 +111,10 @@ class Trainer(BaseTrainer):
 
         return {
             'loss': loss.detach().cpu().item(),
-            'scalar/surface': u_zero_squared.mean().detach().cpu().item(),
-            'scalar/normal_alignement': normal_alignment.mean().detach().cpu().item(),
+            'scalar/surface': loss_fit.mean().detach().cpu().item(),
+            'scalar/normal_alignement': loss_normal.mean().detach().cpu().item(),
             'scalar/loss': loss.detach().mean().cpu().item(),
-            'scalar/bd_loss': bd_loss.detach().cpu().item(),
+            'scalar/loss_boundary': loss_boundary.detach().cpu().item(),
             
         }
 
@@ -180,7 +180,7 @@ class Trainer(BaseTrainer):
             else: print("Sampling strategy not implemented!")
             u = self.net(xyz)
             u_zero = self.net(input_points)
-            u_zero_squared = torch.square(u_zero)
+            loss_fit = torch.square(u_zero)
             grad_u = gradient(u, xyz)
             u_near = near_net(xyz)
             grad_u_near = gradient(u_near, xyz)
@@ -191,10 +191,10 @@ class Trainer(BaseTrainer):
                 grad_u_far = gradient(u_far, xyz)            
                 grad_blend = (1-beta(u_near, kappa))*grad_u_far + (beta(u_near, kappa))*grad_u_near
                 n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
-                normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
+                loss_normal = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
             else:
                 n = grad_u_near/torch.norm(grad_u_near, dim = -1).view(bs, 1)
-                normal_alignment = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
+                loss_normal = (weight * torch.norm(grad_u - n, dim = -1).view(bs, 1) + (1-weight) * torch.norm(grad_u + n, dim = -1).view(bs, 1))
             
             ### boundary loss alternative:
             inner_sample = sample_points_from_box_midpoints(gt_inner, box_width, N = 500)
@@ -203,10 +203,10 @@ class Trainer(BaseTrainer):
             outer = self.net(outer_sample)
             inner_loss = eta(-inner, 0.0005)
             outer_loss = eta(outer, 0.0005)
-            bd_loss =  outer_loss + inner_loss
-            print(bd_loss.mean())
+            loss_boundary =  outer_loss + inner_loss
+            print(loss_boundary.mean())
 
-        loss = lamda[0]*u_zero_squared.mean()  + lamda[1]*normal_alignment.mean()+ lamda[2]* bd_loss.mean()
+        loss = lamda[0]*loss_fit.mean()  + lamda[1]*loss_normal.mean()+ lamda[2]* loss_boundary.mean()
         
         
         writer.add_scalar('train/val_loss', loss.detach().cpu().item(), epoch)

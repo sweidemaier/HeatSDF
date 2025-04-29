@@ -8,8 +8,6 @@ import numpy as np
 from trainers.utils.vis_utils import imf2mesh
 from utils import load_imf
 
-#TODO Florine ? 
-
 net_path = "/home/weidemaier/HeatSDF/logs/SDF2025-Apr-23-10-13-10/SDF_step"
 ### load network
 net, cfg = load_imf(
