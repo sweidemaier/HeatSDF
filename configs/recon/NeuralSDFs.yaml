@@ -12,8 +12,8 @@ data: !!python/object:argparse.Namespace
     length: 50
     num_sample_points: 10000
 input: !!python/object:argparse.Namespace
-  far_path: /home/weidemaier/HeatSDF/logs/SDF2025-Apr-23-10-54-46/heat_step
-  near_path: /home/weidemaier/HeatSDF/logs/SDF2025-Apr-23-10-54-46/heat_step
+  far_path: /home/weidemaier/SLIDE/logs/SDF2025-Apr-30-15-16-08/heat_step
+  near_path: /home/weidemaier/SLIDE/logs/SDF2025-Apr-30-15-10-47/heat_step
   normalize: scale
   parameters: !!python/object:argparse.Namespace
     box_count: 64
@@ -28,9 +28,9 @@ input: !!python/object:argparse.Namespace
     - 1
     sampling: boxes
     tau: 0.005
-  point_path: /home/weidemaier/HeatSDF/recon benchmark/lordquas_uniform.csv
-log_dir: SDF2025-Apr-23-10-54-46
-log_name: SDF2025-Apr-23-10-54-46
+  point_path: /home/weidemaier/SLIDE/example mesh/hand_center.csv
+log_dir: SDF2025-Apr-30-15-16-08
+log_name: SDF2025-Apr-30-15-16-08
 models: !!python/object:argparse.Namespace
   decoder: !!python/object:argparse.Namespace
     dim: 3
@@ -55,7 +55,7 @@ trainer: !!python/object:argparse.Namespace
     weight_decay: 0.0
   sdf_loss_weight: 1.0
   seed: 100
-  type: trainers.Hessian_Points2SDF
+  type: trainers.Points2SDF
 viz: !!python/object:argparse.Namespace
   log_freq: 10
   save_freq: 1

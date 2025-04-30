@@ -8,11 +8,11 @@ from utils import AverageMeter, dict2namespace, update_cfg_hparam_lst
 from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-import csv
-from trainers.helper import comp_weights
+
+from trainers.helper import comp_weights, load_pts
 import torch
 
-from helper import load_pts
+
 
 
 
@@ -20,12 +20,18 @@ def get_args():
     # command line args
     parser = argparse.ArgumentParser(
         description='Flow-based Point Cloud Generation Experiment')
-    
+    parser.add_argument('config', type=str,
+                        help='The configuration file.')
 
     # distributed training
     parser.add_argument('--gpu', default=None, type=int,
                         help='GPU id to use. None means using all '
                              'available GPUs.')
+
+    # Resume:
+    parser.add_argument('--resume', default=False, action='store_true')
+    parser.add_argument('--pretrained', default=None, type=str,
+                        help="Pretrained cehckpoint")
 
     # Test run:
     parser.add_argument('--test_run', default=False, action='store_true')
@@ -35,13 +41,12 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open("/home/weidemaier/HeatSDF/configs/recon/NeuralSDFs.yaml", 'r') as f:
+    with open(args.config, 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
     
     #  Create log_name
-    run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
     logname = config.log_name
     config.log_name = "logs/" + logname + "/heat_step"
     config.save_dir = "logs/" + logname + "/heat_step"
@@ -60,6 +65,7 @@ def main_worker(cfg, args):
     cudnn.benchmark = True
     
     writer = SummaryWriter(log_dir=cfg.log_name)
+    print(cfg.trainer.type)
     trainer_lib = importlib.import_module(cfg.trainer.type)
     trainer = trainer_lib.Trainer(cfg, args)
 
@@ -73,7 +79,7 @@ def main_worker(cfg, args):
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
 
-    points = load_pts(cfg).cuda()
+    points = load_pts(cfg)
 
     weights = comp_weights(points,cfg.input.parameters.epsilon, cfg.models.decoder.dim)
 
@@ -113,8 +119,6 @@ def main_worker(cfg, args):
                 int(cfg.viz.save_freq) > 0:
             trainer.save(epoch=epoch, step=step)
         
-        # Signal the trainer to cleanup now that an epoch has ended
-        trainer.epoch_end(epoch, writer=writer)
     trainer.save(epoch=epoch, step=step)
     writer.close()
 

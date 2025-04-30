@@ -9,22 +9,18 @@ from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
 from utils import load_imf
 import numpy as np
-from torch.utils.data import DataLoader
-import csv
-from trainers.utils.new_utils import tens
-from trainers.helper import comp_heat_gradients 
-from trainers.helper import inside_outside_torch
-from helper import load_pts
-
-
-from trainers.InsideOutside import inside_outside
+from trainers.helper import comp_heat_gradients, inside_outside_torch, load_pts
 import torch
+
 def get_args():
     # command line args
     parser = argparse.ArgumentParser(
         description='Flow-based Point Cloud Generation Experiment')
+    parser.add_argument('config', type=str,
+                        help='The configuration file.')
     
-
+    parser.add_argument('initialnet', type=str,
+                        help='The Network used for Initialization')
     # distributed training
     parser.add_argument('--gpu', default=None, type=int,
                         help='GPU id to use. None means using all '
@@ -43,7 +39,7 @@ def get_args():
     args = parser.parse_args()
 
     # parse config file
-    with open("/home/weidemaier/HeatSDF/configs/recon/NeuralSDFs.yaml", 'r') as f:
+    with open(args.config, 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
     config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
@@ -90,12 +86,12 @@ def main_worker(cfg, args):
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
     
-    points = load_pts(cfg).cuda()
+    points = torch.tensor(load_pts(cfg)).cuda()
     inner, outer, occ = inside_outside_torch(points, grid_size = cfg.input.parameters.box_count, dilate=True) 
     inner.requires_grad_(True)
     outer.requires_grad_(True)
     ### load networks
-    near_net,cfg_near = load_imf(cfg.input.near_path, return_cfg=False)
+    near_net,_ = load_imf(cfg.input.near_path, return_cfg=False)
     kappa = (3/5)*near_net(occ).max().cpu().detach().numpy()
  
     if (cfg.input.far_path != "None"):
@@ -103,15 +99,13 @@ def main_worker(cfg, args):
     else: far_net = None
     n_inner, n_outer = comp_heat_gradients(inner, outer, near_net, far_net, kappa)
 
-    valmin = 2
-    valcount = 0   
+
     for epoch in range(start_epoch, cfg.trainer.epochs + start_epoch):
         # train for one epoch
         loader_start = time.time()
         
         for batchnumber in range(1000):
 
-            #print(points.shape)
             loader_duration = time.time() - loader_start
             loader_meter.update(loader_duration)
             step = batchnumber + 1000 * epoch + 1
@@ -142,13 +136,6 @@ def main_worker(cfg, args):
                 int(cfg.viz.save_freq) > 0:
             trainer.save(epoch=epoch, step=step)
 
-        if (epoch + 1) % int(cfg.viz.val_freq) == 0 and \
-                int(cfg.viz.val_freq) > 0:
-            val_info = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer, kappa, box_points = occ)
-            
-
-        # Signal the trainer to cleanup now that an epoch has ended
-        trainer.epoch_end(epoch, writer=writer)
         
     trainer.save(epoch=epoch, step=step)
     writer.close()

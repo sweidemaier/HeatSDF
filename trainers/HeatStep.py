@@ -8,7 +8,7 @@ from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
 
 #TODO Florine so umbenennen das es eindeutig zu train_heat gehört
-
+# Samuel ???
 class Trainer(BaseTrainer):
 
     def __init__(self, cfg, args):
@@ -133,13 +133,15 @@ class Trainer(BaseTrainer):
         save_name = "epoch_%s_iters_%s.pt" % (epoch, step)
         torch.save(d, osp.join(self.cfg.save_dir,  "best.pt"))
 
+
+    def resume(self, path, strict=True, **kwargs):
+        ckpt = torch.load(path)
+        self.net.load_state_dict(ckpt['net'], strict=strict)
+        self.opt.load_state_dict(ckpt['opt'])
+        start_epoch = ckpt['epoch']
+        return start_epoch
+
+
     def multi_gpu_wrapper(self, wrapper):
         self.net = wrapper(self.net)
 
-
-    def epoch_end(self, epoch, writer=None, **kwargs):
-        if self.sch is not None:
-            self.sch.step(epoch=epoch)
-            if writer is not None:
-                writer.add_scalar(
-                    'train/opt_lr', self.sch.get_lr()[0], epoch)    

@@ -1,7 +1,7 @@
 import os
 import torch
 import os.path as osp
-import importlib
+import yaml
 import numpy as np
 from trainers.utils.diff_ops import gradient
 from trainers.base_trainer import BaseTrainer
@@ -18,9 +18,7 @@ class Trainer(BaseTrainer):
         self.args = args
         set_random_seed(getattr(self.cfg.trainer, "seed", 666))
 
-        lib = importlib.import_module(cfg.models.decoder.type)
-        #TODO Florine Pfad muss anpassbar sein
-        iniz_net,_ = load_imf("/home/weidemaier/PDE Net/NFGP/logs/NeuralSDFs_2025-Jan-27-11-37-08", return_cfg=False)
+        iniz_net,_ = load_imf(args.initialnet, return_cfg=False)
         self.net = iniz_net
         self.net.cuda()
         
@@ -72,7 +70,7 @@ class Trainer(BaseTrainer):
             xyz.requires_grad_(True)
         else: 
             print("Sampling strategy not implemented!")
-            break
+            raise IndexError
         ### compute on surface and narrow band function values
         u = self.net(xyz)
         u_zero = self.net(input_points)
@@ -109,13 +107,12 @@ class Trainer(BaseTrainer):
             torch.nn.utils.clip_grad_norm_(self.net.parameters(),max_norm=2.0)
             self.opt.step()
 
-        return { #TODO Florine Achtung
+        return {
             'loss': loss.detach().cpu().item(),
             'scalar/surface': loss_fit.mean().detach().cpu().item(),
             'scalar/normal_alignement': loss_normal.mean().detach().cpu().item(),
             'scalar/loss': loss.detach().mean().cpu().item(),
             'scalar/loss_boundary': loss_bd.detach().cpu().item(),
-            
         }
 
 
@@ -163,7 +160,7 @@ class Trainer(BaseTrainer):
             xyz.requires_grad_(True)
         else: 
             print("Sampling strategy not implemented!")
-            break
+            raise TypeError
         ### compute on surface and narrow band function values
         u = self.net(xyz)
         u_zero = self.net(input_points)
@@ -226,8 +223,17 @@ class Trainer(BaseTrainer):
         torch.save(d, osp.join(self.cfg.save_dir,  "best.pt"))
 
 
+    def resume(self, path, strict=True, **kwargs):
+        ckpt = torch.load(path)
+        self.net.load_state_dict(ckpt['net'], strict=strict)
+        self.opt.load_state_dict(ckpt['opt'])
+        start_epoch = ckpt['epoch']
+        return start_epoch
+
+
     def multi_gpu_wrapper(self, wrapper):
         self.net = wrapper(self.net)
+
 
     def epoch_end(self, epoch, writer=None, **kwargs):
         if self.sch is not None:

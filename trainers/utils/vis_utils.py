@@ -1,8 +1,3 @@
-#TODO Florine was tun die?
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import tqdm
 import torch
 import trimesh
@@ -10,8 +5,10 @@ import skimage
 import numpy as np
 import skimage.measure
 
-#TODO Florine: hast du die Funktion irgendwo her ? Dann kenntlich machen 
-#TODO Florine kurz kommentieren was Funktion macht
+# Visualization functions are borrowed from:
+# https://github.com/stevenygd/NFGP/blob/master/trainers/utils/vis_utils.py
+
+#takes input implicit function and creates meshed surface; based on marching cubes
 def imf2mesh(imf, res=256, threshold=0.0, batch_size = 10000, verbose=True,
              use_double=False, normalize=False, norm_type='res',
              return_stats=False, bound=1.):
@@ -48,8 +45,6 @@ def imf2mesh(imf, res=256, threshold=0.0, batch_size = 10000, verbose=True,
     try:
         vert, face, _, _ = skimage.measure.marching_cubes(
             field, level=threshold)
-        #print(vert.max(), vert.min())
-        # Vertices will be [0, res - 1]
 
         if normalize:
             if norm_type == 'norm':
@@ -63,12 +58,8 @@ def imf2mesh(imf, res=256, threshold=0.0, batch_size = 10000, verbose=True,
                 raise ValueError
         new_mesh = trimesh.Trimesh(vertices=vert, faces=face)
     except ValueError as e:
-        #print(field.max(), field.min())
-        #print(e)
         new_mesh = None
     except RuntimeError as e:
-        #print(field.max(), field.min())
-        #print(e)
         new_mesh = None
 
     if return_stats:

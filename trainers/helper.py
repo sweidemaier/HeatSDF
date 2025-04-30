@@ -1,11 +1,10 @@
 import scipy.spatial as tree
-import scipy.integrate as integral
 import numpy as np
 import time
-from trainers.utils.new_utils import tens
 from trainers.utils.diff_ops import gradient
 import torch
 import csv
+import torch.nn.functional as F
 def eta(x, delta= 0.1):
     vec = (1/4)*(x/(delta) + 2*torch.torch.ones_like(x))*(x/(delta) - torch.ones_like(x))**2
     vec = torch.where(x <= -(delta)*torch.ones_like(x),  torch.ones_like(x), vec)
@@ -204,7 +203,7 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False):
     return inside_real, outside_real, occupied_real
 
 
-def load_pts(cfg): #TODO Florine hier gibts Probleme
+def load_pts(cfg):
     with open(cfg.input.point_path) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=',')
             file = open(cfg.input.point_path)

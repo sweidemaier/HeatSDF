@@ -54,7 +54,7 @@ def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
 
     # Load pretrained checkpoints
     ep2file = {}
-    last_file, last_ep = osp.join(log_path, "latest.pt"), -1
+    last_file, last_ep = osp.join(log_path, "best.pt"), -1
     if ckpt_fpath is not None:
         last_file = ckpt_fpath
     else:
