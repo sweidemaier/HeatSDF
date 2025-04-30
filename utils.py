@@ -4,8 +4,13 @@ import argparse
 import importlib
 import os.path as osp
 
+<<<<<<< HEAD
 #TODO Florine dieses utils file sinnvoll einsortieren
 
+=======
+# utils are borrowed from:
+# https://github.com/stevenygd/NFGP/blob/master/utils.py
+>>>>>>> 8f7da562d623dea788bc3140bd70f543176b451c
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self, name, fmt=':f'):
@@ -41,6 +46,10 @@ def dict2namespace(config):
         setattr(namespace, key, new_value)
     return namespace
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8f7da562d623dea788bc3140bd70f543176b451c
 def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
              epoch=None, verbose=False,
              return_trainer=False, return_cfg=False):
@@ -84,6 +93,10 @@ def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
         del trainer
         return imf, cfg
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8f7da562d623dea788bc3140bd70f543176b451c
 def parse_hparams(hparam_lst):
     print("=" * 80)
     print("Parsing:", hparam_lst)
