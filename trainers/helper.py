@@ -200,8 +200,34 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False):
     inside_real = to_world(inside.nonzero(as_tuple=False).float())
     outside_real = to_world(outside.nonzero(as_tuple=False).float())
     occupied_real = to_world(grid.nonzero(as_tuple=False).float())
-    np.savetxt("gt_inner.csv", inside_real.detach().cpu().numpy() , delimiter = ",", header = "x,y,z")
-    np.savetxt("gt_outer.csv", outside_real.detach().cpu().numpy() , delimiter = ",", header = "x,y,z")
-    np.savetxt("occupado.csv", occupied_real.detach().cpu().numpy() , delimiter = ",", header = "x,y,z")
     return inside_real, outside_real, occupied_real
 
+
+def load_pts(cfg):
+    with open(cfg.input.point_path) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            file = open(cfg.input.point_path)
+            count = len(file.readlines()) -1
+            points = [None]*count
+            line_count = 0
+            for row in csv_reader:
+                if (line_count == 0):
+                    line_count += 1
+                else:
+                    a = float(row[0])
+                    b = float(row[1])
+                    if (cfg.models.decoder.dim == 3):
+                        c = float(row[2])
+                    points[line_count-1] = [a, b]
+                    if (cfg.models.decoder.dim == 3):
+                        points[line_count-1] = [a, b, c]
+                    line_count += 1 
+        if(cfg.input.normalize == "scale"):
+            points -= np.mean(points, axis=0, keepdims=True)
+            coord_max = np.amax(points)
+            coord_min = np.amin(points)
+            points = (points - coord_min) / (coord_max - coord_min)
+            points -= 0.5
+            points *= 2.    
+        points = np.float32(points)
+        return points

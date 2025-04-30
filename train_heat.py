@@ -11,6 +11,7 @@ import numpy as np
 import csv
 from trainers.helper import comp_weights
 import torch
+from helper import load_pts
 
 
 def get_args():
@@ -23,11 +24,6 @@ def get_args():
     parser.add_argument('--gpu', default=None, type=int,
                         help='GPU id to use. None means using all '
                              'available GPUs.')
-
-    # Resume:
-    parser.add_argument('--resume', default=False, action='store_true')
-    parser.add_argument('--pretrained', default=None, type=str,
-                        help="Pretrained cehckpoint")
 
     # Test run:
     parser.add_argument('--test_run', default=False, action='store_true')
@@ -67,51 +63,16 @@ def main_worker(cfg, args):
 
     start_epoch = 0
     start_time = time.time()
-    if args.resume:
-        if args.pretrained is not None:
-            start_epoch = trainer.resume(args.pretrained)
-        else:
-            start_epoch = trainer.resume(cfg.resume.dir)
-
-    # If test run, go through the validation loop first
-    if args.test_run:
-        trainer.save(epoch=-1, step=-1)
-        val_info = trainer.validate(epoch=-1)
-
+    
     # main training loop
     print("Start epoch: %d End epoch: %d" % (start_epoch, cfg.trainer.epochs + start_epoch))
     step = 0
     duration_meter = AverageMeter("Duration")
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
-    with open(cfg.input.point_path) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        file = open(cfg.input.point_path)
-        count = len(file.readlines()) -1
-        points = [None]*count
-        line_count = 0
-        for row in csv_reader:
-            if (line_count == 0):
-                line_count += 1
-            else:
-                a = float(row[0])
-                b = float(row[1])
-                if (cfg.models.decoder.dim == 3):
-                    c = float(row[2])
-                points[line_count-1] = [a, b]
-                if (cfg.models.decoder.dim == 3):
-                    points[line_count-1] = [a, b, c]
-                line_count += 1 
-    if(cfg.input.normalize == "scale"):
-        points -= np.mean(points, axis=0, keepdims=True)
-        coord_max = np.amax(points)
-        coord_min = np.amin(points)
-        points = (points - coord_min) / (coord_max - coord_min)
-        points -= 0.5
-        points *= 2.    
-    points = np.float32(points)
+    points = load_pts(cfg).cuda()
     weights = comp_weights(points,cfg.input.parameters.epsilon, cfg.models.decoder.dim)
-    #np.savetxt('heat_weights.out', weights, delimiter=",")
+
     points = torch.tensor(points).cuda()
     weights = torch.tensor(np.float32(weights)).cuda()
 
@@ -143,13 +104,11 @@ def main_worker(cfg, args):
             trainer.save_best_val(epoch, step)
             best_val = val_loss
         trainer.sch.step(val_loss)
-        # Save first so that even if the visualization bugged,
-        # we still have something
+        
         if (epoch + 1) % int(cfg.viz.save_freq) == 0 and \
                 int(cfg.viz.save_freq) > 0:
             trainer.save(epoch=epoch, step=step)
-            
-
+        
         # Signal the trainer to cleanup now that an epoch has ended
         trainer.epoch_end(epoch, writer=writer)
     trainer.save(epoch=epoch, step=step)
