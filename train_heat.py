@@ -11,7 +11,9 @@ import numpy as np
 import csv
 from trainers.helper import comp_weights
 import torch
-from utils import load_pts
+
+from helper import load_pts
+
 
 
 def get_args():
@@ -24,11 +26,6 @@ def get_args():
     parser.add_argument('--gpu', default=None, type=int,
                         help='GPU id to use. None means using all '
                              'available GPUs.')
-
-    # Resume:
-    parser.add_argument('--resume', default=False, action='store_true')
-    parser.add_argument('--pretrained', default=None, type=str,
-                        help="Pretrained cehckpoint")
 
     # Test run:
     parser.add_argument('--test_run', default=False, action='store_true')
@@ -75,9 +72,11 @@ def main_worker(cfg, args):
     duration_meter = AverageMeter("Duration")
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
-    points = load_pts(cfg)
+
+    points = load_pts(cfg).cuda()
+
     weights = comp_weights(points,cfg.input.parameters.epsilon, cfg.models.decoder.dim)
-    #np.savetxt('heat_weights.out', weights, delimiter=",")
+
     points = torch.tensor(points).cuda()
     weights = torch.tensor(np.float32(weights)).cuda()
 
@@ -109,13 +108,11 @@ def main_worker(cfg, args):
             trainer.save_best_val(epoch, step)
             best_val = val_loss
         trainer.sch.step(val_loss)
-        # Save first so that even if the visualization bugged,
-        # we still have something
+        
         if (epoch + 1) % int(cfg.viz.save_freq) == 0 and \
                 int(cfg.viz.save_freq) > 0:
             trainer.save(epoch=epoch, step=step)
-            
-
+        
         # Signal the trainer to cleanup now that an epoch has ended
         trainer.epoch_end(epoch, writer=writer)
     trainer.save(epoch=epoch, step=step)

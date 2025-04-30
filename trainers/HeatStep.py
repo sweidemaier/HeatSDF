@@ -6,9 +6,7 @@ from trainers.utils.diff_ops import gradient
 from trainers.utils.vis_utils import imf2mesh
 from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
-from trainers.utils.new_utils import tens
-from models.borrowed_PINN_model import DR #TODO Florine rm
-torch.pi = torch.acos(torch.zeros(1)).item() * 2
+torch.pi = torch.acos(torch.zeros(1)).item() * 2 #TODO Florine??? find good place for this 
 import numpy as np
 from trainers.utils.vis_utils import imf2mesh
 
@@ -36,7 +34,8 @@ class Trainer(BaseTrainer):
         os.makedirs(osp.join(cfg.save_dir, "val"), exist_ok=True)
         os.makedirs(osp.join(cfg.save_dir, "images"), exist_ok=True)
         os.makedirs(osp.join(cfg.save_dir, "checkpoints"), exist_ok=True)
-        
+
+
     def update(self,  cfg, weights, input_points,  *args, **kwargs):
         if 'no_update' in kwargs:
             no_update = kwargs['no_update']
@@ -50,17 +49,17 @@ class Trainer(BaseTrainer):
         tau = np.float32(cfg.input.parameters.tau)
         domain_bound = cfg.input.parameters.domain_bound
         input_bs = input_points.shape[0]
-        if (dims == 3): #TODO abfrage entfernen
-            xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
-            
-            u = self.net(xyz)
-            u_squared = torch.square(u)
-            u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
-            
-            u_input = self.net(input_points)
-            #TODO FLorine better name than val, prod 
-            val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
-            prod = torch.sum(val)     
+
+        xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
+        
+        u = self.net(xyz)
+        u_squared = torch.square(u)
+        u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
+        
+        u_input = self.net(input_points)
+        val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
+        prod = torch.sum(val)    
+
         loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
         if not no_update:
             loss.backward()
@@ -87,22 +86,8 @@ class Trainer(BaseTrainer):
                 continue
             if t == 'scalar':
                 writer.add_scalar('train/' + kn, v, writer_step)
-        #print("Current learning rate: ", self.opt.param_groups[0]["lr"])
         writer.add_scalar('train/learning_rate', self.opt.param_groups[0]["lr"], writer_step)
 
-        if visualize:
-            with torch.no_grad():
-                print("Visualize: %s" % step)
-                res = int(getattr(self.cfg.trainer, "vis_mc_res", 256))
-                thr = float(getattr(self.cfg.trainer, "vis_mc_thr", 0.))
-
-                mesh = imf2mesh(
-                    lambda x: self.net(x), res=res, threshold=thr)
-                if mesh is not None:
-                    save_name = "mesh_%diters.obj" \
-                                % (step if step is not None else epoch)
-                    mesh.export(osp.join(self.cfg.save_dir, "val", save_name))
-                    mesh.export(osp.join(self.cfg.save_dir, "latest_mesh.obj"))
 
     def validate(self, cfg, weights, input_points, writer, epoch, *args, **kwargs):
         bs = cfg.input.parameters.bs
@@ -110,21 +95,22 @@ class Trainer(BaseTrainer):
         tau = np.float32(cfg.input.parameters.tau)
         domain_bound = cfg.input.parameters.domain_bound
         input_bs = input_points.shape[0]
-        if (dims == 3): #TOD0 s.o.
-            xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
-            
-            u = self.net(xyz)
-            u_squared = torch.square(u)
-            u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
-            
-            u_input = self.net(input_points)
-            val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
-            prod = torch.sum(val)     
+
+        xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
+        
+        u = self.net(xyz)
+        u_squared = torch.square(u)
+        u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
+        
+        u_input = self.net(input_points)
+        val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
+        prod = torch.sum(val)     
+
         loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
         writer.add_scalar('train/val_loss', loss.detach().cpu().item(), epoch)
         return {
-            'loss': loss.detach().cpu().item(),}
-        
+            'loss': loss.detach().cpu().item(),}  
+
 
     def save(self, epoch=None, step=None, appendix=None, **kwargs):
         d = {
@@ -139,7 +125,8 @@ class Trainer(BaseTrainer):
         torch.save(d, osp.join(self.cfg.save_dir, "checkpoints", save_name))
         torch.save(d, osp.join(self.cfg.save_dir, "latest.pt"))
 
-    def  save_best_val(self, epoch=None, step=None,**kwargs):
+
+    def save_best_val(self, epoch=None, step=None,**kwargs):
         d = {
             'opt': self.opt.state_dict(),
             'net': self.net.state_dict(),
@@ -149,19 +136,9 @@ class Trainer(BaseTrainer):
         save_name = "epoch_%s_iters_%s.pt" % (epoch, step)
         torch.save(d, osp.join(self.cfg.save_dir,  "best.pt"))
 
-    def resume(self, path, strict=True, **kwargs):
-        ckpt = torch.load(path)
-        self.net.load_state_dict(ckpt['net'], strict=strict)
-        self.opt.load_state_dict(ckpt['opt'])
-        start_epoch = ckpt['epoch']
-        return start_epoch
-    #TODO Florine wird das genutzt ? 
     def multi_gpu_wrapper(self, wrapper):
         self.net = wrapper(self.net)
 
+
     def epoch_end(self, epoch, writer=None, **kwargs):
-        '''if self.sch is not None:
-            self.sch.step(epoch=epoch)
-            if writer is not None:
-                writer.add_scalar(
-                    'train/opt_lr', self.sch.get_lr()[0], epoch)'''
+        

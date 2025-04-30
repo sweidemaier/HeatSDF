@@ -35,7 +35,8 @@ def update_config(param1, create_logdir = False):
     # Write back to the file
     with open(CONFIG_FILE, "w") as configfile:
   	    yaml.dump(config, configfile)
-
+        
+### runs both heat and SDF step and safes resulting networks in same logs folder
 def run_script():
     update_config("trainers.Points2unsignedDF", True)
     subprocess.run(["python", "train_heat.py"])
