@@ -5,7 +5,7 @@ import time
 from trainers.utils.new_utils import tens
 from trainers.utils.diff_ops import gradient
 import torch
-
+import csv
 def eta(x, delta= 0.1):
     vec = (1/4)*(x/(delta) + 2*torch.torch.ones_like(x))*(x/(delta) - torch.ones_like(x))**2
     vec = torch.where(x <= -(delta)*torch.ones_like(x),  torch.ones_like(x), vec)
@@ -223,12 +223,12 @@ def load_pts(cfg): #TODO Florine hier gibts Probleme
                     if (cfg.models.decoder.dim == 3):
                         points[line_count-1] = [a, b, c]
                     line_count += 1 
-        if(cfg.input.normalize == "scale"):
-            points -= np.mean(points, axis=0, keepdims=True)
-            coord_max = np.amax(points)
-            coord_min = np.amin(points)
-            points = (points - coord_min) / (coord_max - coord_min)
-            points -= 0.5
-            points *= 2.    
-        points = np.float32(points)
+    if(cfg.input.normalize == "scale"):
+        points -= np.mean(points, axis=0, keepdims=True)
+        coord_max = np.amax(points)
+        coord_min = np.amin(points)
+        points = (points - coord_min) / (coord_max - coord_min)
+        points -= 0.5
+        points *= 2.    
+    points = np.float32(points)
     return points

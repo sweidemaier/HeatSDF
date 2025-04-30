@@ -2,12 +2,10 @@ import os
 import torch
 import os.path as osp
 import importlib
+import numpy as np
 from trainers.utils.diff_ops import gradient
-from trainers.utils.vis_utils import imf2mesh
 from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
-from trainers.utils.new_utils import tens
-import numpy as np
 from utils import load_imf
 from trainers.helper import sample_points_from_box_midpoints
 
@@ -116,7 +114,7 @@ class Trainer(BaseTrainer):
             'scalar/surface': loss_fit.mean().detach().cpu().item(),
             'scalar/normal_alignement': loss_normal.mean().detach().cpu().item(),
             'scalar/loss': loss.detach().mean().cpu().item(),
-            'scalar/loss_boundary': loss_boundary.detach().cpu().item(),
+            'scalar/loss_boundary': loss_bd.detach().cpu().item(),
             
         }
 
@@ -231,5 +229,9 @@ class Trainer(BaseTrainer):
     def multi_gpu_wrapper(self, wrapper):
         self.net = wrapper(self.net)
 
-
-    def epoch_end(self, epoch, writer=None, **kwargs): #TODO Florine ??
+    def epoch_end(self, epoch, writer=None, **kwargs):
+        if self.sch is not None:
+            self.sch.step(epoch=epoch)
+            if writer is not None:
+                writer.add_scalar(
+                    'train/opt_lr', self.sch.get_lr()[0], epoch)

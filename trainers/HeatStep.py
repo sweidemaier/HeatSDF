@@ -2,13 +2,10 @@ import os
 import torch
 import os.path as osp
 import importlib
+import numpy as np
 from trainers.utils.diff_ops import gradient
-from trainers.utils.vis_utils import imf2mesh
 from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
-torch.pi = torch.acos(torch.zeros(1)).item() * 2 #TODO Florine??? find good place for this 
-import numpy as np
-from trainers.utils.vis_utils import imf2mesh
 
 #TODO Florine so umbenennen das es eindeutig zu train_heat gehört
 
@@ -141,4 +138,8 @@ class Trainer(BaseTrainer):
 
 
     def epoch_end(self, epoch, writer=None, **kwargs):
-        
+        if self.sch is not None:
+            self.sch.step(epoch=epoch)
+            if writer is not None:
+                writer.add_scalar(
+                    'train/opt_lr', self.sch.get_lr()[0], epoch)    
