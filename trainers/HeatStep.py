@@ -7,8 +7,6 @@ from trainers.utils.diff_ops import gradient
 from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
 
-#TODO Florine so umbenennen das es eindeutig zu train_heat gehört
-# Samuel ???
 class Trainer(BaseTrainer):
 
     def __init__(self, cfg, args):

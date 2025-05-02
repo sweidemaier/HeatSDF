@@ -12,10 +12,6 @@ import numpy as np
 from trainers.helper import comp_weights, load_pts
 import torch
 
-
-
-
-
 def get_args():
     # command line args
     parser = argparse.ArgumentParser(
