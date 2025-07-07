@@ -42,7 +42,7 @@ The config file allows you to adjust various settings, including data paths and 
 ---
 ## ✍️ Citation
 If you use this code or ideas from the paper, please cite:
-''' bibtex
+``` bibtex
 @article{HeatSDF,
   title={SDFs from Unoriented Point Clouds using Neural Variational Heat Distances},
   author={Weidemaier et al.},
