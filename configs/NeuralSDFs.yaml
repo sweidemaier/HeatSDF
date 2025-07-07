@@ -1,0 +1,45 @@
+!!python/object:argparse.Namespace
+input: !!python/object:argparse.Namespace
+  far_path: None
+  near_path: /home/weidemaier/NeatSDF/logs/SDF2025-Jul-07-14-23-17/heat_step
+  normalize: false
+  parameters: !!python/object:argparse.Namespace
+    Hessian_parameter: 1.0e-05
+    box_count: 64
+    bs: 5000
+    delta: 0.005
+    domain_bound: 1.2
+    epsilon: 0.001
+    eta: 1
+    lamda:
+    - 100000
+    - 10
+    - 100
+    sampling: boxes
+    tau: 0.005
+  point_path: /Example Clouds/bunny.csv
+log_dir: SDF2025-Jul-07-14-23-17
+log_name: SDF2025-Jul-07-14-23-17
+models: !!python/object:argparse.Namespace
+  decoder: !!python/object:argparse.Namespace
+    dim: 3
+    hidden_size: 256
+    n_blocks: 4
+    out_dim: 1
+    type: models.siren_mlp
+save_dir: logs/SDF2025-Jun-04-11-12-00/SDF_step
+trainer: !!python/object:argparse.Namespace
+  epochs: 50
+  opt: !!python/object:argparse.Namespace
+    beta1: 0.9
+    beta2: 0.999
+    lr: 1.0e-05
+    momentum: 0.9
+    scheduler: adaptive
+    type: adam
+    weight_decay: 0.0
+  seed: 100
+  type: trainers.HeatStep
+viz: !!python/object:argparse.Namespace
+  log_freq: 10
+  save_freq: 1

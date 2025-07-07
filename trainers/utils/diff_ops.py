@@ -1,8 +1,10 @@
 # Based on https://github.com/vsitzmann/siren/blob/master/diff_operators.py
 import torch
 from torch.autograd import grad
-import numpy as np
 
+
+
+### all diff-ops are based on torch autograd
 def hessian(y, x):
     """
     Hessian of y wrt x
@@ -30,7 +32,15 @@ def hessian(y, x):
     return h, status
 
 
+
 def laplace(y, x, normalize=False, eps=0., return_grad=False):
+    """
+    Laplacian of y wrt x
+    y: shape (meta_batch_size, num_observations, channels)
+    x: shape (meta_batch_size, num_observations, dim)
+    return:
+        shape (meta_batch_size, num_observations, channels)
+    """
     grad = gradient(y, x)
     if normalize:
         grad = grad / (grad.norm(dim=-1, keepdim=True) + eps)
@@ -41,7 +51,15 @@ def laplace(y, x, normalize=False, eps=0., return_grad=False):
     return div
 
 
+
 def divergence(y, x):
+    """
+    Divergence of y wrt x
+    y: shape (meta_batch_size, num_observations, dim)  # vector field
+    x: shape (meta_batch_size, num_observations, dim)
+    return:
+        shape (meta_batch_size, num_observations)
+    """
     div = 0.
     for i in range(y.shape[-1]):
         div += grad(
@@ -50,10 +68,17 @@ def divergence(y, x):
     return div
 
 
+
 def gradient(y, x, grad_outputs=None):
+    """
+    Gradient of y wrt x
+    y: shape (meta_batch_size, num_observations, channels)
+    x: shape (meta_batch_size, num_observations, dim)
+    return:
+        shape (meta_batch_size, num_observations, dim, channels)
+    """
     if grad_outputs is None:
         grad_outputs = torch.ones_like(y)
     grad = torch.autograd.grad(
         y, [x], grad_outputs=grad_outputs, create_graph=True)[0]
     return grad
-

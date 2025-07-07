@@ -1,15 +1,20 @@
-import scipy.spatial as tree
-import numpy as np
-import time
-from trainers.utils.diff_ops import gradient
-import torch
+import os
 import csv
+import time
+import torch
+import numpy as np
+import scipy.spatial as tree
 import torch.nn.functional as F
+
+
+
 def eta(x, delta= 0.1):
     vec = (1/4)*(x/(delta) + 2*torch.torch.ones_like(x))*(x/(delta) - torch.ones_like(x))**2
     vec = torch.where(x <= -(delta)*torch.ones_like(x),  torch.ones_like(x), vec)
     vec = torch.where(x > (delta)*torch.ones_like(x), torch.zeros_like(x), vec)
     return vec.view(x.shape[0], 1)
+
+
 
 def beta(x, kappa):
     x = x/kappa
@@ -17,77 +22,61 @@ def beta(x, kappa):
     vec = torch.where(x > torch.ones_like(x), torch.ones_like(x), vec)
     return vec
 
+
+
 def bump_func(x):
-        if (abs(x) > 1):
-            return 0
-        else:
-            return np.exp(1/((abs(x)**2)-1))   
-    
-def comp_weights(pointcloud, epsilon, dim = 2 ):
+    if (abs(x) > 1):
+        return 0
+    else:
+        return np.exp(1/((abs(x)**2)-1))   
+
+
+### compute locally adaptive weights for heat step
+def comp_weights(pointcloud, epsilon, dim = 3):
     start = time.time()
     w = np.zeros(np.shape(pointcloud)[0])
-
-    #c_eps = (epsilon**dim)
-    tr = tree.cKDTree(pointcloud)
-    
     r = epsilon
     print("initial eps:", r)
+
+    ### sort input points in tree
+    tr = tree.cKDTree(pointcloud)
     p = tr.query_ball_point(x = pointcloud, r = r, workers = -1)
+    
+    ### increase radius, until for each point its eps-environment contains at least a few points; we choose 12
     while any(len(ball) < 12 for ball in p):
         r *= 2
-
         p = tr.query_ball_point(x = pointcloud, r = r, workers = -1)
+    print("scaled eps:",r)
+    
     c_eps = (r**dim)
     j = 0
-    print("scaled eps:",r)
+
+    ### for each point compute weight
     while j < np.size(p):
         ball_indices = p[j]
         ball_points = pointcloud[ball_indices]
         dists = np.linalg.norm(pointcloud[j]-ball_points, axis = 1)
         sum = 1/c_eps*np.sum([bump_func(dists[i]/r) for i in range(len(dists))])
         w[j] = 1/sum
-
         j += 1
     
+    ### normalize weights
     w = w/np.sum(w)
     print("Total computation time:", time.time() - start)
     return w
 
-def comp_heat_gradients(gt_inner, gt_outer, near_net, far_net, kappa):
-    outer_size = gt_outer.shape[0]
-    inner_size = gt_inner.shape[0]
-   
-    grad_near_inner = gradient(near_net(gt_inner), gt_inner)
-    grad_near_outer = gradient(near_net(gt_outer), gt_outer)
-    if(far_net != None):
-        grad_far_inner = gradient(far_net(gt_inner), gt_inner)
-        grad_far_outer = gradient(far_net(gt_outer), gt_outer)
-    
-    u_near_inner = near_net(gt_inner)
-    u_near_outer = near_net(gt_outer)
-    if(far_net != None):
-        n_inner = (1-beta(u_near_inner, kappa))*grad_far_inner + (beta(u_near_inner, kappa))*grad_near_inner
-        n_outer = (1-beta(u_near_outer, kappa))*grad_far_outer + (beta(u_near_outer, kappa))*grad_near_outer
-    else: 
-        n_inner = grad_near_inner
-        n_outer = grad_near_outer
-    n_inner = n_inner/torch.norm(n_inner, dim = -1).view(inner_size, 1)
-    n_outer = n_outer/torch.norm(n_outer, dim = -1).view(outer_size, 1)
-    n_outer = n_outer.detach()
-    n_inner = n_inner.detach()
-    
-    return n_inner, n_outer
 
 
-def sample_points_from_box_midpoints(box_midpoints, h, N, device='cuda'):
+def sample_points_from_box_midpoints(box_midpoints, h, N, device='cuda', dim = 3):
     """
-    Sample N points uniformly from non-overlapping 3D boxes using PyTorch (CUDA-compatible).
+    Sample N points uniformly from non-overlapping 3D boxes
 
     Parameters:
         box_midpoints (torch.Tensor): Tensor of shape (B, 3), midpoints of each box.
         h (float): Edge length of the cube boxes.
         N (int): Number of points to sample.
         device (str): PyTorch device (e.g., 'cuda' or 'cpu').
+        dim: Dimension
 
     Returns:
         torch.Tensor: Tensor of shape (N, 3) with sampled points.
@@ -98,7 +87,10 @@ def sample_points_from_box_midpoints(box_midpoints, h, N, device='cuda'):
     box_indices = torch.randint(0, B, (N,), device=device)
 
     # Sample offsets in the range [-h/2, h/2]
-    offsets = (torch.rand((N, 3), device=device) - 0.5) * h
+    if dim == 2: 
+        offsets = (torch.rand((N, 2), device=device) - 0.5) * h
+    else: 
+        offsets = (torch.rand((N, 3), device=device) - 0.5) * h
 
     # Gather midpoints for each selected box
     selected_midpoints = box_midpoints[box_indices]
@@ -106,13 +98,48 @@ def sample_points_from_box_midpoints(box_midpoints, h, N, device='cuda'):
     return selected_midpoints + offsets
 
 
-def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False):
+
+def load_pts(cfg):
+    ### load points and scale to [-1,1]^3 
+    with open(os.path.dirname(os.path.dirname(__file__)) + cfg.input.point_path) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            file = open(os.path.dirname(os.path.dirname(__file__)) + cfg.input.point_path)
+            count = len(file.readlines()) -1
+            points = [None]*count
+            line_count = 0
+            for row in csv_reader:
+                if (line_count == 0):
+                    line_count += 1
+                else:
+                    a = float(row[0])
+                    b = float(row[1])
+                    if (cfg.models.decoder.dim == 3):
+                        c = float(row[2])
+                    points[line_count-1] = [a, b]
+                    if (cfg.models.decoder.dim == 3):
+                        points[line_count-1] = [a, b, c]
+                    line_count += 1 
+
+    points -= np.mean(points, axis=0, keepdims=True)
+    coord_max = np.amax(points)
+    coord_min = np.amin(points)
+    points = (points - coord_min) / (coord_max - coord_min)
+    points -= 0.5
+    points *= 2.    
+    points = np.float32(points)
+    return points
+
+
+
+def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False, safe_clouds = False):
     """
+    Function that creates a box_grid and separates occupied boxes (from input poincloud) and inside/outside regions 
     Args:
         point_cloud: (N, 3) torch tensor (cuda) of points
         grid_size: size of voxel grid per axis
         bounds: (min_bound, max_bound) as tuples or tensors
         dilate: whether to expand occupied voxels to include neighbors
+        safe_clouds: whether to save the computed pointclouds as csv
     Returns:
         inside_real, outside_real, occupied_real: real-space voxel center coordinates
     """
@@ -200,34 +227,14 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False):
         grid = grid_f[0, 0] > 0
 
     occupied_real = to_world(grid.nonzero(as_tuple=False).float())
+
+    if safe_clouds:
+        # Save
+        np.savetxt("gt_inner.csv", inside_real.detach().cpu().numpy(), delimiter=",", header="x,y,z")
+        np.savetxt("gt_outer.csv", outside_real.detach().cpu().numpy(), delimiter=",", header="x,y,z")
+        np.savetxt("occupado.csv", occupied_real.detach().cpu().numpy(), delimiter=",", header="x,y,z")
+
     return inside_real, outside_real, occupied_real
 
 
-def load_pts(cfg):
-    with open(cfg.input.point_path) as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter=',')
-            file = open(cfg.input.point_path)
-            count = len(file.readlines()) -1
-            points = [None]*count
-            line_count = 0
-            for row in csv_reader:
-                if (line_count == 0):
-                    line_count += 1
-                else:
-                    a = float(row[0])
-                    b = float(row[1])
-                    if (cfg.models.decoder.dim == 3):
-                        c = float(row[2])
-                    points[line_count-1] = [a, b]
-                    if (cfg.models.decoder.dim == 3):
-                        points[line_count-1] = [a, b, c]
-                    line_count += 1 
-    if(cfg.input.normalize == "scale"):
-        points -= np.mean(points, axis=0, keepdims=True)
-        coord_max = np.amax(points)
-        coord_min = np.amin(points)
-        points = (points - coord_min) / (coord_max - coord_min)
-        points -= 0.5
-        points *= 2.    
-    points = np.float32(points)
-    return points
+

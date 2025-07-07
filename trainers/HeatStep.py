@@ -1,20 +1,22 @@
 import os
 import torch
-import os.path as osp
 import importlib
 import numpy as np
+import os.path as osp
+
 from trainers.utils.diff_ops import gradient
 from trainers.base_trainer import BaseTrainer
 from trainers.utils.utils import get_opt, set_random_seed
 
+
 class Trainer(BaseTrainer):
 
-    def __init__(self, cfg, args):
-        super().__init__(cfg, args)
-        self.cfg = cfg
-        self.args = args
-        set_random_seed(getattr(self.cfg.trainer, "seed", 666))
+    def __init__(self, cfg):
+        super().__init__(cfg)
 
+        self.cfg = cfg
+        set_random_seed(getattr(self.cfg.trainer, "seed", 666))
+        ### the network
         lib = importlib.import_module(cfg.models.decoder.type)
         self.net = lib.Net(cfg, cfg.models.decoder)
         self.net.cuda()
@@ -31,35 +33,32 @@ class Trainer(BaseTrainer):
         os.makedirs(osp.join(cfg.save_dir, "checkpoints"), exist_ok=True)
 
 
-    def update(self,  cfg, weights, input_points,  *args, **kwargs):
-        if 'no_update' in kwargs:
-            no_update = kwargs['no_update']
-        else:
-            no_update = False
-        if not no_update:
-            self.net.train()
-            self.opt.zero_grad()
-        bs = cfg.input.parameters.bs
-        dims = cfg.models.decoder.dim 
+
+    def update(self,  cfg, weights, input_points):
+        ### load settings
+        bs = cfg.input.parameters.bs 
         tau = np.float32(cfg.input.parameters.tau)
         domain_bound = cfg.input.parameters.domain_bound
         input_bs = input_points.shape[0]
 
+        ### sample uniform points
         xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
         
+        ### compute terms for domain integral 
         u = self.net(xyz)
         u_squared = torch.square(u)
         u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
         
+        ### compute terms for surface integral
         u_input = self.net(input_points)
         val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
         prod = torch.sum(val)    
 
         loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
-        if not no_update:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.net.parameters(),max_norm=2.0)
-            self.opt.step()
+        
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.net.parameters(),max_norm=2.0)
+        self.opt.step()
 
         return {
             'loss': loss.detach().cpu().item(),
@@ -68,7 +67,7 @@ class Trainer(BaseTrainer):
 
 
     def log_train(self, train_info, writer=None,
-                  step=None, epoch=None, visualize=False, **kwargs):
+                  step=None, epoch=None):
         if writer is None:
             return
 
@@ -84,30 +83,35 @@ class Trainer(BaseTrainer):
         writer.add_scalar('train/learning_rate', self.opt.param_groups[0]["lr"], writer_step)
 
 
-    def validate(self, cfg, weights, input_points, writer, epoch, *args, **kwargs):
+    def validate(self, cfg, weights, input_points, writer, epoch):
+        ### load settings
         bs = cfg.input.parameters.bs
-        dims = cfg.models.decoder.dim 
         tau = np.float32(cfg.input.parameters.tau)
         domain_bound = cfg.input.parameters.domain_bound
         input_bs = input_points.shape[0]
-
+        
+        ### sample uniform points
         xyz = (torch.rand(bs, 3, device='cuda', requires_grad=True) * 2 * domain_bound) - domain_bound
         
+        ### compute terms for domain integral
         u = self.net(xyz)
         u_squared = torch.square(u)
         u_grad_norm = torch.square(torch.norm(gradient(u, xyz), dim=-1))
         
+        ###compute terms for surface integral
         u_input = self.net(input_points)
         val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
         prod = torch.sum(val)     
 
         loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
+        
         writer.add_scalar('train/val_loss', loss.detach().cpu().item(), epoch)
         return {
             'loss': loss.detach().cpu().item(),}  
 
 
-    def save(self, epoch=None, step=None, appendix=None, **kwargs):
+    def save(self, epoch=None, step=None, appendix=None):
+        #save current network weights after each iteration
         d = {
             'opt': self.opt.state_dict(),
             'net': self.net.state_dict(),
@@ -121,7 +125,8 @@ class Trainer(BaseTrainer):
         torch.save(d, osp.join(self.cfg.save_dir, "latest.pt"))
 
 
-    def save_best_val(self, epoch=None, step=None,**kwargs):
+    def save_best_val(self, epoch=None, step=None):
+        # save network weight with lowest validation loass
         d = {
             'opt': self.opt.state_dict(),
             'net': self.net.state_dict(),
@@ -130,16 +135,3 @@ class Trainer(BaseTrainer):
         }
         save_name = "epoch_%s_iters_%s.pt" % (epoch, step)
         torch.save(d, osp.join(self.cfg.save_dir,  "best.pt"))
-
-
-    def resume(self, path, strict=True, **kwargs):
-        ckpt = torch.load(path)
-        self.net.load_state_dict(ckpt['net'], strict=strict)
-        self.opt.load_state_dict(ckpt['opt'])
-        start_epoch = ckpt['epoch']
-        return start_epoch
-
-
-    def multi_gpu_wrapper(self, wrapper):
-        self.net = wrapper(self.net)
-

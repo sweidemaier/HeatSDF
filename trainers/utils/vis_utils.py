@@ -5,6 +5,7 @@ import skimage
 import numpy as np
 import skimage.measure
 
+
 # Visualization functions are borrowed from:
 # https://github.com/stevenygd/NFGP/blob/master/trainers/utils/vis_utils.py
 
@@ -65,7 +66,7 @@ def imf2mesh(imf, res=256, threshold=0.0, batch_size = 10000, verbose=True,
     if return_stats:
         if new_mesh is not None:
             area = new_mesh.area
-            vol = (field < threshold).astype(np.float).mean() * (2 * bound) ** 3
+            vol = (field < threshold).astyse(np.float).mean() * (2 * bound) ** 3
         else:
             area = 0
             vol = 0

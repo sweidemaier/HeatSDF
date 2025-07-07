@@ -26,7 +26,7 @@ input: !!python/object:argparse.Namespace
     inner_radius: 0.25
     near_cut_off: 10
     tau: 0.01
-  point_path: /home/weidemaier/New Network/NFGP/sphere3D.csv
+  point_path: /home/weidemaier/HeatSDF/...
 log_dir: logs/NeuralSDFs_2025-Jan-27-11-37-08
 log_name: logs/NeuralSDFs_2025-Jan-27-11-37-08
 models: !!python/object:argparse.Namespace

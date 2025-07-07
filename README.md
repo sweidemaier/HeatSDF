@@ -28,7 +28,7 @@ conda activate HeatSDF
 ## 🚀 Usage
 To run the complete learning pipeline for both the heat method and SDF reconstruction, execute the following command:
 ```
-python run_pipeline.py
+python run_HeatSDF.py
 ```
 This will start the training process, performing both the heat learning stage (to estimate gradients of the unsigned distance field) and the SDF learning stage (to reconstruct the signed distance function).
 

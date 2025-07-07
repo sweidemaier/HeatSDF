@@ -1,51 +1,25 @@
 import os
 import yaml
 import time
-import argparse
+import torch
 import importlib
+import numpy as np
 import os.path as osp
-from utils import AverageMeter, dict2namespace, update_cfg_hparam_lst
 from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
-from utils import load_imf
-import numpy as np
-from trainers.helper import comp_heat_gradients, inside_outside_torch, load_pts
-import torch
 
-def get_args():
-    # command line args
-    parser = argparse.ArgumentParser(
-        description='Flow-based Point Cloud Generation Experiment')
-    parser.add_argument('config', type=str,
-                        help='The configuration file.')
-    
-    parser.add_argument('initialnet', type=str,
-                        help='The Network used for Initialization')
-    # distributed training
-    parser.add_argument('--gpu', default=None, type=int,
-                        help='GPU id to use. None means using all '
-                             'available GPUs.')
+from trainers.standard_utils import AverageMeter, dict2namespace, load_imf
+from trainers.helper import inside_outside_torch, load_pts
 
-    # Resume:
-    parser.add_argument('--resume', default=False, action='store_true')
-    parser.add_argument('--pretrained', default=None, type=str,
-                        help="Pretrained cehckpoint")
 
-    # Test run:
-    parser.add_argument('--test_run', default=False, action='store_true')
 
-    # Hyper parameters
-    parser.add_argument('--hparams', default=[], nargs="+")
-    args = parser.parse_args()
-
+def get_args(input_config):
     # parse config file
-    with open(args.config, 'r') as f:
+    with open(input_config, 'r') as f:
         config = yaml.load(f, Loader=yaml.Loader)
     config = dict2namespace(config)
-    config, hparam_str = update_cfg_hparam_lst(config, args.hparams)
-
+    
     #  Create log_name
-    run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
     logname = config.log_name
     config.log_name = "logs/" + logname + "/SDF_step"
     config.save_dir = "logs/" + logname + "/SDF_step"
@@ -55,51 +29,40 @@ def get_args():
     with open(osp.join(config.log_dir, "config", "config.yaml"), "w") as outf:
         yaml.dump(config, outf)
 
-    return args, config
+    return config
 
 
-def main_worker(cfg, args):
+def main_worker(cfg):
     # basic setup
     cudnn.benchmark = True
-    logname = cfg.log_name
+
     writer = SummaryWriter(log_dir=cfg.log_name)
     trainer_lib = importlib.import_module(cfg.trainer.type)
-    trainer = trainer_lib.Trainer(cfg, args)
+    trainer = trainer_lib.Trainer(cfg)
 
     start_epoch = 0
     start_time = time.time()
-    if args.resume:
-        if args.pretrained is not None:
-            start_epoch = trainer.resume(args.pretrained)
-        else:
-            start_epoch = trainer.resume(cfg.resume.dir)
 
-    # If test run, go through the validation loop first
-    if args.test_run:
-        trainer.save(epoch=-1, step=-1)
-        val_info = trainer.validate(epoch=-1)
-
-    # main training loop
     print("Start epoch: %d End epoch: %d" % (start_epoch, cfg.trainer.epochs + start_epoch))
     step = 0
     duration_meter = AverageMeter("Duration")
     loader_meter = AverageMeter("Loader time")
     best_val = np.Infinity
     
+    #load pointcloud and compute boxgrid for effective sampling and inner/outer regions 
     points = torch.tensor(load_pts(cfg)).cuda()
-    inner, outer, occ = inside_outside_torch(points, grid_size = cfg.input.parameters.box_count, dilate=True) 
+    inner, outer, occ = inside_outside_torch(points, grid_size = cfg.input.parameters.box_count, dilate=True, safe_clouds=False) 
     inner.requires_grad_(True)
     outer.requires_grad_(True)
-    ### load networks
-    near_net,_ = load_imf(cfg.input.near_path, return_cfg=False)
-    kappa = (3/5)*near_net(occ).max().cpu().detach().numpy()
- 
+
+    ### load heat step networks
+    near_net,_ = load_imf(cfg.input.near_path)
     if (cfg.input.far_path != "None"):
-        far_net,_ = load_imf(cfg.input.far_path, return_cfg=False)
+        far_net,_ = load_imf(cfg.input.far_path)
     else: far_net = None
-    n_inner, n_outer = comp_heat_gradients(inner, outer, near_net, far_net, kappa)
-
-
+    kappa = (3/5)*near_net(occ).max().cpu().detach().numpy()
+    
+    ### start actual training loop
     for epoch in range(start_epoch, cfg.trainer.epochs + start_epoch):
         # train for one epoch
         loader_start = time.time()
@@ -109,6 +72,7 @@ def main_worker(cfg, args):
             loader_duration = time.time() - loader_start
             loader_meter.update(loader_duration)
             step = batchnumber + 1000 * epoch + 1
+            ### evaluate loss
             logs_info = trainer.update(cfg, input_points = points , near_net = near_net, far_net = far_net, epoch = epoch, step = step, gt_inner = inner, gt_outer = outer, kappa = kappa, box_points = occ)
             
             if step % int(cfg.viz.log_freq) == 0 and int(cfg.viz.log_freq) > 0:
@@ -125,7 +89,7 @@ def main_worker(cfg, args):
 
             # Reset loader time
             loader_start = time.time()
-        val_loss = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, n_inner, n_outer, kappa, box_points = occ)['loss']
+        val_loss = trainer.validate(cfg, points, near_net, far_net, writer, epoch, inner, outer, kappa, box_points = occ)['loss']
         
         if(val_loss < best_val): 
             trainer.save_best_val(epoch, step)
@@ -134,21 +98,15 @@ def main_worker(cfg, args):
        
         if (epoch + 1) % int(cfg.viz.save_freq) == 0 and \
                 int(cfg.viz.save_freq) > 0:
-            trainer.save(epoch=epoch, step=step)
-
+            trainer.save(epoch=epoch, step=step, vis = False)
         
-    trainer.save(epoch=epoch, step=step)
+    trainer.save(epoch=epoch, step=step, vis = True)
     writer.close()
 
 
-if __name__ == '__main__':
-    # command line args
-    args, cfg = get_args()
-
-    print("Arguments:")
-    print(args)
-
+def run_training(input_config):
+    # collect config settings and start training of SDF step
+    cfg = get_args(input_config)
     print("Configuration:")
     print(cfg)
-
-    main_worker(cfg, args)
+    main_worker(cfg)

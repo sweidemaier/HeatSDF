@@ -3,6 +3,8 @@ import random
 import numpy as np
 from torch import optim
 
+# General utils functions are borrowed from:
+# https://github.com/stevenygd/NFGP/blob/master/trainers/utils/utils.py
 
 def get_opt(params, cfgopt, overwrite_lr=None):
     if overwrite_lr is not None:
@@ -37,10 +39,9 @@ def get_opt(params, cfgopt, overwrite_lr=None):
             def lambda_rule(ep):
                 lr_l = 1.0 - min(1, max(0, ep - start_ratio * step_size) / float(duration_ratio * step_size)) * (1 - final_ratio)
                 return lr_l
-
             scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
         elif scheduler_type == 'adaptive':
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = 2, verbose = True)#,  patience=100, eps=1e-8)
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = 2)
         
         elif scheduler_type == 'cosine_anneal_nocycle':
             final_lr_ratio = float(getattr(cfgopt, "final_lr_ratio", 0.01))
