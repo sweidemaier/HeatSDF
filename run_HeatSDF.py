@@ -1,5 +1,3 @@
-import argparse
-
 from train_heat import run_training as run_heat_training
 from train_SDF import run_training as run_SDF_training
 from trainers.standard_utils import update_config
@@ -16,7 +14,7 @@ run_heat_training(CONFIG_FILE)
 # run_heat_training(CONFIG_FILE)
 
 # Step 3: Train with NeatSDF
-update_config(CONFIG_FILE, "trainers.HeatSDF")
+update_config(CONFIG_FILE, "trainers.SDFStep")
 run_SDF_training(CONFIG_FILE)
 
 

@@ -170,7 +170,7 @@ def update_config(CONFIG_FILE, param1 = None, create_logdir = False, use_farfiel
         run_time = time.strftime('%Y-%b-%d-%H-%M-%S')
         config.log_dir = "SDF" + run_time
         config.log_name = "SDF" + run_time
-        config.input.near_path = os.path.join(os.path.expanduser("~"), "NeatSDF", "logs", "SDF" + run_time, "heat_step")
+        config.input.near_path = os.path.join(os.path.expanduser("~"), "HeatSDF", "logs", "SDF" + run_time, "heat_step")
         config.input.far_path= str("None")  
     if (use_farfield):
         config.input.parameters.tau = tau
@@ -185,7 +185,7 @@ def update_config(CONFIG_FILE, param1 = None, create_logdir = False, use_farfiel
 
         config.log_dir = config.log_dir + "/heat_step_far"
         config.log_name = config.log_name + "/heat_step_far"
-        config.input.far_path = os.path.join(os.path.expanduser("~"), "NeatSDF", "logs", "SDF" + run_time, "heat_step") 
+        config.input.far_path = os.path.join(os.path.expanduser("~"), "HeatSDF", "logs", "SDF" + run_time, "heat_step") 
     # Write back to the file
     with open(CONFIG_FILE, "w") as configfile:
   	    yaml.dump(config, configfile)

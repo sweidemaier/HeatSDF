@@ -84,9 +84,7 @@ class Trainer(BaseTrainer):
         if(far_net != None):
             u_far = far_net(xyz)
             grad_u_far = gradient(u_far, xyz)
-            n_far = grad_u_far/torch.norm(grad_u_far, dim = -1).view(bs, 1)
-            n_near = grad_u_near/torch.norm(grad_u_near, dim = -1).view(bs, 1)            
-            grad_blend = (1-beta(u_near, kappa))*n_far + (beta(u_near, kappa))*n_near
+            grad_blend = (1-beta(u_near, kappa))*grad_u_far + (beta(u_near, kappa))*grad_u_near
             n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
             normal_alignment = (weight * torch.square(torch.norm(grad_u - n, dim = -1)).view(bs, 1) + (1-weight) * torch.square(torch.norm(grad_u + n, dim = -1)).view(bs, 1))
         else:
