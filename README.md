@@ -1,6 +1,5 @@
-![We compute neural SDFs from unoriented point clouds (left) by first computing a small time step of heat flow (middle) and then using its gradient directions to solve for a neural SDF (right).](teaser.png)
 # HeatSDF
-
+![We compute neural SDFs from unoriented point clouds (left) by first computing a small time step of heat flow (middle) and then using its gradient directions to solve for a neural SDF (right).](Teaser.pdf)
 This repository contains the official code for the paper:
 
 **"SDFs from Unoriented Point Clouds using Neural Variational Heat Distances"**  
