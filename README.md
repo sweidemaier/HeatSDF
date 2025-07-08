@@ -32,12 +32,12 @@ python run_pipeline.py
 ```
 This will start the training process, performing both the heat learning stage (to estimate gradients of the unsigned distance field) and the SDF learning stage (to reconstruct the signed distance function).
 
-If you want to test the method on your own point clouds, simply modify the input paths in the relevant configuration file located in:
+If you want to test the method on your own point clouds, simply modify the input paths in the relevant configuration file located in the config folder.
 
+The config file allows you to adjust various settings, including data paths and hyperparameters. Especially, if you are interested in an approximation of an SDF near the surface, use 
 ```
-config/recon/
+input.parameters.sampling: boxes
 ```
-The config file allows you to adjust various settings, including data paths and hyperparameters.
 
 ---
 ## ✍️ Citation
