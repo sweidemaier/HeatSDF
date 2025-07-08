@@ -34,7 +34,7 @@ This will start the training process, performing both the heat learning stage (t
 
 If you want to test the method on your own point clouds, simply modify the input paths in the relevant configuration file located in the config folder.
 
-The config file allows you to adjust various settings, including data paths and hyperparameters. Especially, if you are interested in an approximation of an SDF near the surface, use 
+The config file allows you to adjust various settings, including data paths and hyperparameters. Especially, if you are only interested in an approximation of the SDF near the surface, use 
 ```
 input.parameters.sampling: boxes
 ```
