@@ -9,7 +9,7 @@ from torch.backends import cudnn
 from torch.utils.tensorboard import SummaryWriter
 
 from trainers.standard_utils import AverageMeter, dict2namespace, load_imf
-from trainers.helper import inside_outside_torch, load_pts
+from trainers.helper import inside_outside_SDF, load_pts
 
 
 
@@ -51,7 +51,9 @@ def main_worker(cfg):
     
     #load pointcloud and compute boxgrid for effective sampling and inner/outer regions 
     points = torch.tensor(load_pts(cfg)).cuda()
-    inner, outer, occ = inside_outside_torch(points, grid_size = cfg.input.parameters.box_count, dilate=True, safe_clouds=False) 
+    domain_bound = cfg.input.parameters.domain_bound
+    inner, outer, occ = inside_outside_SDF(points, grid_size = cfg.input.parameters.box_count, dilate=True, dim = cfg.models.decoder.dim, bound=domain_bound) 
+    
     inner.requires_grad_(True)
     outer.requires_grad_(True)
 

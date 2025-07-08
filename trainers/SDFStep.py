@@ -21,7 +21,9 @@ class Trainer(BaseTrainer):
         self.cfg = cfg
         set_random_seed(getattr(self.cfg.trainer, "seed", 666))
         ### we initialize the SDF-step with a precomputed approximation of the SDF of the unit sphere
-        iniz_net,_ = load_imf("/home/weidemaier/HeatSDF/configs/initialization network")
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        init_config_path = os.path.join(base_dir, "configs", "initialization network")
+        iniz_net,_ = load_imf(init_config_path)
         self.net = iniz_net
         self.net.cuda()
         print("Net:")
@@ -36,12 +38,15 @@ class Trainer(BaseTrainer):
         os.makedirs(osp.join(cfg.save_dir, "images"), exist_ok=True)
         os.makedirs(osp.join(cfg.save_dir, "checkpoints"), exist_ok=True)
         
-    def update(self,  cfg, input_points, near_net, far_net, epoch, step, gt_inner, gt_outer, kappa, box_points):
+    def update(self, cfg, input_points, near_net, far_net, epoch, step, gt_inner, gt_outer, kappa, box_points):
         if (epoch == 0):
             if(step == 1):
                 print("init")
                 return {}
             
+        self.net.train()
+        self.opt.zero_grad() 
+
         ### load settings        
         domain_bound = cfg.input.parameters.domain_bound
         bs = cfg.input.parameters.bs
@@ -86,7 +91,7 @@ class Trainer(BaseTrainer):
             grad_u_far = gradient(u_far, xyz)
             grad_blend = (1-beta(u_near, kappa))*grad_u_far + (beta(u_near, kappa))*grad_u_near
             n = grad_blend/torch.norm(grad_blend, dim = -1).view(bs, 1)
-            normal_alignment = (weight * torch.square(torch.norm(grad_u - n, dim = -1)).view(bs, 1) + (1-weight) * torch.square(torch.norm(grad_u + n, dim = -1)).view(bs, 1))
+            normal_alignment = (weight * torch.square(torch.norm(grad_u + n, dim = -1)).view(bs, 1) + (1-weight) * torch.square(torch.norm(grad_u - n, dim = -1)).view(bs, 1))
         else:
             n = grad_u_near/torch.norm(grad_u_near, dim = -1).view(bs, 1)
             normal_alignment = (weight * torch.square(torch.norm(grad_u - n, dim = -1)).view(bs, 1) + (1-weight) * torch.square(torch.norm(grad_u + n, dim = -1)).view(bs, 1))
@@ -147,7 +152,7 @@ class Trainer(BaseTrainer):
     def validate(self, cfg, input_points, near_net, far_net, writer, epoch, gt_inner, gt_outer, kappa, box_points):
         ###load settings
         domain_bound = cfg.input.parameters.domain_bound
-        bs = cfg.input.parameters.bs
+        bs = 10*cfg.input.parameters.bs
         lamda = cfg.input.parameters.lamda
         box_width = 2*domain_bound/(cfg.input.parameters.box_count - 1)
 
@@ -200,7 +205,6 @@ class Trainer(BaseTrainer):
         inner_loss = eta(inner, 0.0005) 
         outer_loss = eta(-outer, 0.0005)
         bd_loss =  outer_loss.mean() + inner_loss.mean()
-
         loss = lamda[0]*u_zero_squared.mean()  + lamda[1]*normal_alignment.mean()+ lamda[2]* bd_loss
         
         
@@ -221,7 +225,7 @@ class Trainer(BaseTrainer):
             d.update(appendix)
         save_name = "epoch_%s_iters_%s.pt" % (epoch, step)
         if vis:
-            mesh = imf2mesh(self.net, res = 256, normalize=True, bound = 1.2, threshold=0.0)
+            mesh = imf2mesh(self.net, res = 256, normalize=True, bound = 1.15, threshold=0.0)
             trimesh.exchange.export.export_mesh(mesh,self.cfg.save_dir +"/final_res" + ".obj", file_type=None, resolver=None) 
         torch.save(d, osp.join(self.cfg.save_dir, "checkpoints", save_name))
         torch.save(d, osp.join(self.cfg.save_dir, "latest.pt"))
@@ -235,3 +239,12 @@ class Trainer(BaseTrainer):
             'step': step
         }
         torch.save(d, osp.join(self.cfg.save_dir,  "best.pt"))
+
+
+
+    def resume(self, path, strict=True):
+        ckpt = torch.load(path)
+        self.net.load_state_dict(ckpt['net'], strict=strict)
+        self.opt.load_state_dict(ckpt['opt'])
+        start_epoch = ckpt['epoch']
+        return start_epoch

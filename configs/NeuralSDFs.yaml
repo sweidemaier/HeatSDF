@@ -1,7 +1,6 @@
 !!python/object:argparse.Namespace
 input: !!python/object:argparse.Namespace
   far_path: None
-  near_path: None
   parameters: !!python/object:argparse.Namespace
     box_count: 64
     bs: 5000
@@ -15,9 +14,7 @@ input: !!python/object:argparse.Namespace
     - 1
     sampling: boxes
     tau: 0.005
-  point_path: /Example Clouds/bunny.csv
-log_dir: None
-log_name: None
+  point_path: /Example Clouds/hand.csv
 models: !!python/object:argparse.Namespace
   decoder: !!python/object:argparse.Namespace
     dim: 3
@@ -25,7 +22,6 @@ models: !!python/object:argparse.Namespace
     n_blocks: 4
     out_dim: 1
     type: models.siren_mlp
-save_dir: None
 trainer: !!python/object:argparse.Namespace
   epochs: 50
   opt: !!python/object:argparse.Namespace
@@ -37,7 +33,6 @@ trainer: !!python/object:argparse.Namespace
     type: adam
     weight_decay: 0.0
   seed: 100
-  type: None
 viz: !!python/object:argparse.Namespace
   log_freq: 10
   save_freq: 1

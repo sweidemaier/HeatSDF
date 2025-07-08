@@ -35,6 +35,8 @@ class Trainer(BaseTrainer):
 
 
     def update(self,  cfg, weights, input_points):
+        self.net.train()
+        self.opt.zero_grad()
         ### load settings
         bs = cfg.input.parameters.bs 
         tau = np.float32(cfg.input.parameters.tau)
@@ -51,10 +53,10 @@ class Trainer(BaseTrainer):
         
         ### compute terms for surface integral
         u_input = self.net(input_points)
-        val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
+        val = weights.view(input_bs, 1)*(u_input.view(input_bs, 1))
         prod = torch.sum(val)    
 
-        loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
+        loss = u_squared.mean() + tau*u_grad_norm.mean() - 2*prod.mean()
         
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.net.parameters(),max_norm=2.0)
@@ -100,11 +102,10 @@ class Trainer(BaseTrainer):
         
         ###compute terms for surface integral
         u_input = self.net(input_points)
-        val = weights.view(input_bs, 1)*(2*u_input.view(input_bs, 1)-torch.ones(input_bs,1).cuda())
+        val = weights.view(input_bs, 1)*(u_input.view(input_bs, 1))
         prod = torch.sum(val)     
 
-        loss = u_squared.mean() + tau*u_grad_norm.mean() - prod.mean()
-        
+        loss = u_squared.mean() + tau*u_grad_norm.mean() - 2*prod.mean()
         writer.add_scalar('train/val_loss', loss.detach().cpu().item(), epoch)
         return {
             'loss': loss.detach().cpu().item(),}  
@@ -125,6 +126,7 @@ class Trainer(BaseTrainer):
         torch.save(d, osp.join(self.cfg.save_dir, "latest.pt"))
 
 
+
     def save_best_val(self, epoch=None, step=None):
         # save network weight with lowest validation loass
         d = {
@@ -133,5 +135,13 @@ class Trainer(BaseTrainer):
             'epoch': epoch,
             'step': step
         }
-        save_name = "epoch_%s_iters_%s.pt" % (epoch, step)
         torch.save(d, osp.join(self.cfg.save_dir,  "best.pt"))
+
+
+
+    def resume(self, path, strict=True):
+        ckpt = torch.load(path)
+        self.net.load_state_dict(ckpt['net'], strict=strict)
+        self.opt.load_state_dict(ckpt['opt'])
+        start_epoch = ckpt['epoch']
+        return start_epoch

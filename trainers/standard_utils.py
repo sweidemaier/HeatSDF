@@ -46,8 +46,11 @@ def dict2namespace(config):
         setattr(namespace, key, new_value)
     return namespace
 
+
+
 def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
-             epoch=None, verbose=False):
+             epoch=None, verbose=False,
+             return_trainer=False):
     # Load configuration
     if config_fpath is None:
         config_fpath = osp.join(log_path, "config", "config.yaml")
@@ -75,14 +78,17 @@ def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
                     last_file = osp.join(ckpt_path, f)
             if epoch is not None:
                 last_file = ep2file[epoch]
-    print(last_file)
 
     trainer_lib = importlib.import_module("trainers.HeatStep")
     trainer = trainer_lib.Trainer(cfg)
+    trainer.resume(last_file)
     
-    imf = trainer.net
-    del trainer
-    return imf, cfg
+    if return_trainer:
+        return trainer, cfg
+    else:
+        imf = trainer.net
+        del trainer
+        return imf, cfg
 
 def load_pts(cfg):
     with open(cfg.input.point_path) as csv_file:

@@ -131,28 +131,28 @@ def load_pts(cfg):
 
 
 
-def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False, safe_clouds = False):
+def inside_outside_SDF(point_cloud, grid_size=32, bound=1.2, dilate=True, dim=3, safe_clouds = True):
     """
-    Function that creates a box_grid and separates occupied boxes (from input poincloud) and inside/outside regions 
     Args:
-        point_cloud: (N, 3) torch tensor (cuda) of points
+        point_cloud: (N, D) torch tensor (cuda) of points in 2D or 3D
         grid_size: size of voxel grid per axis
         bounds: (min_bound, max_bound) as tuples or tensors
-        dilate: whether to expand occupied voxels to include neighbors
-        safe_clouds: whether to save the computed pointclouds as csv
+        dilate: whether to expand occupied voxels
+        dim: spatial dimension (2 or 3)
     Returns:
         inside_real, outside_real, occupied_real: real-space voxel center coordinates
     """
     assert point_cloud.is_cuda, "Input point cloud must be on CUDA"
+    assert dim in [2, 3], "Only 2D or 3D supported"
 
     device = point_cloud.device
     dtype = torch.float32
 
-    if bounds is None:
-        min_bounds = torch.tensor([-1.2, -1.2, -1.2], device=device, dtype=dtype)
-        max_bounds = torch.tensor([1.2, 1.2, 1.2], device=device, dtype=dtype)
-    else:
-        min_bounds, max_bounds = bounds
+    # Default bounds
+    
+    min_bounds = torch.tensor([-bound]*dim, device=device, dtype=dtype)
+    max_bounds = torch.tensor([bound]*dim, device=device, dtype=dtype)
+    
 
     bbox_size = max_bounds - min_bounds
     grid_step = bbox_size / (grid_size - 1)
@@ -160,31 +160,73 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False, s
     # Compute voxel indices
     indices = torch.clamp(((point_cloud - min_bounds) / grid_step).long(), 0, grid_size - 1)
 
-    # Occupancy grid
-    grid = torch.zeros((grid_size, grid_size, grid_size), dtype=torch.bool, device=device)
-    grid[indices[:, 0], indices[:, 1], indices[:, 2]] = True
+    if dim == 3:
+        grid = torch.zeros((grid_size, grid_size, grid_size), dtype=torch.bool, device=device)
+        grid[indices[:, 0], indices[:, 1], indices[:, 2]] = True
+    else:  # 2D
+        grid = torch.zeros((grid_size, grid_size), dtype=torch.bool, device=device)
+        grid[indices[:, 0], indices[:, 1]] = True
 
-    # === FLOOD FILL FOR OUTSIDE === #
+    # === DILATION === #
+    h = grid_step[0].item()
+    dilate_count = max(1, int(np.ceil(0.1 / h)))
+
+    grid_copy = grid.clone()
+    if dilate:
+        for i in range(dilate_count):
+            if dim == 3:
+                kernel = torch.ones((3, 3, 3), device=device)
+                kernel[1, 1, 1] = 0
+                kernel = kernel[None, None]
+                grid_f = grid[None, None].float()
+                padded = F.pad(grid_f, (1, 1, 1, 1, 1, 1))
+                dilated = F.conv3d(padded, kernel) > 0
+                grid_f = torch.logical_or(dilated, grid_f > 0).float()
+                grid = grid_f[0, 0] > 0
+            else:  # 2D
+                kernel = torch.ones((3, 3), device=device)
+                kernel[1, 1] = 0
+                kernel = kernel[None, None]
+                grid_f = grid[None, None].float()
+                padded = F.pad(grid_f, (1, 1, 1, 1))
+                dilated = F.conv2d(padded, kernel) > 0
+                grid_f = torch.logical_or(dilated, grid_f > 0).float()
+                grid = grid_f[0, 0] > 0
+
+            if i == 0:
+                grid_copy = grid.clone()
+
+    # === FLOOD FILL === #
     visited = torch.zeros_like(grid)
     outside = torch.zeros_like(grid)
 
-    boundary_mask = torch.zeros_like(grid)
-    boundary_mask[0, :, :] = boundary_mask[-1, :, :] = 1
-    boundary_mask[:, 0, :] = boundary_mask[:, -1, :] = 1
-    boundary_mask[:, :, 0] = boundary_mask[:, :, -1] = 1
+    if dim == 3:
+        boundary_mask = torch.zeros_like(grid)
+        boundary_mask[0, :, :] = boundary_mask[-1, :, :] = 1
+        boundary_mask[:, 0, :] = boundary_mask[:, -1, :] = 1
+        boundary_mask[:, :, 0] = boundary_mask[:, :, -1] = 1
 
-    boundary_start = (~grid) & boundary_mask
+        neighbors = torch.tensor([
+            [1, 0, 0], [-1, 0, 0],
+            [0, 1, 0], [0, -1, 0],
+            [0, 0, 1], [0, 0, -1]
+        ], device=device)
+    else:
+        boundary_mask = torch.zeros_like(grid)
+        boundary_mask[0, :] = boundary_mask[-1, :] = 1
+        boundary_mask[:, 0] = boundary_mask[:, -1] = 1
+
+        neighbors = torch.tensor([
+            [1, 0], [-1, 0],
+            [0, 1], [0, -1]
+        ], device=device)
+
+    boundary_start = (~grid_copy) & boundary_mask
     queue = boundary_start.nonzero(as_tuple=False)
-    visited[queue[:, 0], queue[:, 1], queue[:, 2]] = True
-    outside[queue[:, 0], queue[:, 1], queue[:, 2]] = True
+    visited[tuple(queue.T)] = True
+    outside[tuple(queue.T)] = True
 
-    # BFS flood fill using queue
-    neighbors = torch.tensor([
-        [1, 0, 0], [-1, 0, 0],
-        [0, 1, 0], [0, -1, 0],
-        [0, 0, 1], [0, 0, -1]
-    ], device=device)
-
+    # BFS
     while queue.numel() > 0:
         current = queue
         queue = []
@@ -192,40 +234,22 @@ def inside_outside_torch(point_cloud, grid_size=32, bounds=None, dilate=False, s
             neighbor_coords = current + offset
             mask = ((neighbor_coords >= 0) & (neighbor_coords < grid_size)).all(dim=1)
             neighbor_coords = neighbor_coords[mask]
-            x, y, z = neighbor_coords[:, 0], neighbor_coords[:, 1], neighbor_coords[:, 2]
-            new_mask = (~visited[x, y, z]) & (~grid[x, y, z])
-            visited[x[new_mask], y[new_mask], z[new_mask]] = True
-            outside[x[new_mask], y[new_mask], z[new_mask]] = True
+            slices = tuple(neighbor_coords.T)
+            new_mask = (~visited[slices]) & (~grid_copy[slices])
+            visited[slices] = visited[slices] | new_mask
+            outside[slices] = outside[slices] | new_mask
             queue.append(neighbor_coords[new_mask])
         if queue:
             queue = torch.cat(queue, dim=0)
 
-    # Inside = not occupied and not outside
-    inside = (~grid) & (~outside)
+    outside = outside & (~grid_copy)
+    inside = (~grid_copy) & (~outside)
 
     def to_world(coords):
         return coords * grid_step + min_bounds + grid_step / 2.
 
     inside_real = to_world(inside.nonzero(as_tuple=False).float())
     outside_real = to_world(outside.nonzero(as_tuple=False).float())
-
-    # === DILATION (optional) === #
-    if dilate:
-        # Pad grid for convolution-style dilation
-        kernel = torch.zeros((3, 3, 3), device=device)
-        kernel[1, 1, 0] = kernel[1, 1, 2] = 1
-        kernel[1, 0, 1] = kernel[1, 2, 1] = 1
-        kernel[0, 1, 1] = kernel[2, 1, 1] = 1
-        kernel = kernel[None, None]
-
-        grid_f = grid[None, None].float()  # Convert to float
-
-        for _ in range(2):
-            padded = F.pad(grid_f, (1, 1, 1, 1, 1, 1))
-            dilated = F.conv3d(padded.float(), kernel) > 0
-            grid_f = torch.logical_or(dilated, grid_f).float()
-        grid = grid_f[0, 0] > 0
-
     occupied_real = to_world(grid.nonzero(as_tuple=False).float())
 
     if safe_clouds:
