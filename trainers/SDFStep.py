@@ -205,6 +205,7 @@ class Trainer(BaseTrainer):
         inner_loss = eta(inner, 0.0005) 
         outer_loss = eta(-outer, 0.0005)
         bd_loss =  outer_loss.mean() + inner_loss.mean()
+        
         loss = lamda[0]*u_zero_squared.mean()  + lamda[1]*normal_alignment.mean()+ lamda[2]* bd_loss
         
         

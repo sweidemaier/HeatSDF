@@ -59,6 +59,7 @@ def main_worker(cfg):
 
     ### load heat step networks
     near_net,_ = load_imf(cfg.input.near_path)
+    print(near_net(torch.tensor([[1.,0.,0.], [0.,0.,1.]]).cuda()))
     if (cfg.input.far_path != "None"):
         far_net,_ = load_imf(cfg.input.far_path)
     else: far_net = None

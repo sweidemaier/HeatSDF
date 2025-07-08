@@ -7,23 +7,7 @@ import scipy.spatial as tree
 import torch.nn.functional as F
 
 
-
-def eta(x, delta= 0.1):
-    vec = (1/4)*(x/(delta) + 2*torch.torch.ones_like(x))*(x/(delta) - torch.ones_like(x))**2
-    vec = torch.where(x <= -(delta)*torch.ones_like(x),  torch.ones_like(x), vec)
-    vec = torch.where(x > (delta)*torch.ones_like(x), torch.zeros_like(x), vec)
-    return vec.view(x.shape[0], 1)
-
-
-
-def beta(x, kappa):
-    x = x/kappa
-    vec = torch.where(x <= torch.zeros_like(x),  torch.zeros_like(x), -2*x**3 + 3*x**2)
-    vec = torch.where(x > torch.ones_like(x), torch.ones_like(x), vec)
-    return vec
-
-
-
+### bump function with compact support
 def bump_func(x):
     if (abs(x) > 1):
         return 0
@@ -31,8 +15,17 @@ def bump_func(x):
         return np.exp(1/((abs(x)**2)-1))   
 
 
+
 ### compute locally adaptive weights for heat step
 def comp_weights(pointcloud, epsilon, dim = 3):
+    """
+    Args:
+        pointcloud: (N, D) numpy array of points in 2D or 3D
+        epsilon: parameter determining the initial neighborhood sizefor points
+        dim: spatial dimension (2 or 3)
+    Returns:
+        w: weights for locally adaptive reweighting during HeatStep
+    """
     start = time.time()
     w = np.zeros(np.shape(pointcloud)[0])
     r = epsilon
@@ -100,7 +93,7 @@ def sample_points_from_box_midpoints(box_midpoints, h, N, device='cuda', dim = 3
 
 
 def load_pts(cfg):
-    ### load points and scale to [-1,1]^3 
+    ### load points from csv and scale to [-1,1]^3 
     with open(os.path.dirname(os.path.dirname(__file__)) + cfg.input.point_path) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=',')
             file = open(os.path.dirname(os.path.dirname(__file__)) + cfg.input.point_path)

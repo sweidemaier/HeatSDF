@@ -34,6 +34,8 @@ class AverageMeter(object):
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
+
+
 def dict2namespace(config):
     if isinstance(config, argparse.Namespace):
         return config
@@ -90,31 +92,7 @@ def load_imf(log_path, config_fpath=None, ckpt_fpath=None,
         del trainer
         return imf, cfg
 
-def load_pts(cfg):
-    with open(cfg.input.point_path) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        file = open(cfg.input.point_path)
-        count = len(file.readlines()) -1
-        points = [None]*count
-        line_count = 0
-        for row in csv_reader:
-            if (line_count == 0):
-                line_count += 1
-            else:
-                a = float(row[0])
-                b = float(row[1])
-                c = float(row[2])
-                points[line_count-1] = [a, b, c]
-                line_count += 1 
-    if(cfg.input.normalize == "scale"):
-        points -= np.mean(points, axis=0, keepdims=True)
-        coord_max = np.amax(points)
-        coord_min = np.amin(points)
-        points = (points - coord_min) / (coord_max - coord_min)
-        points -= 0.5
-        points *= 2.    
-    points = np.float32(points)
-    return points
+
 
 def parse_hparams(hparam_lst):
     print("=" * 80)
@@ -134,6 +112,8 @@ def parse_hparams(hparam_lst):
     print("=" * 80)
     return out, out_str
 
+
+
 def update_cfg_with_hparam(cfg, k, v):
     k_path = k.split(".")
     cfg_curr = cfg
@@ -147,23 +127,15 @@ def update_cfg_with_hparam(cfg, k, v):
     setattr(cfg_curr, k_final, v_type(v))
 
 
+
 def update_cfg_hparam_lst(cfg, hparam_lst):
     hparam_dict, hparam_str = parse_hparams(hparam_lst)
     for k, v in hparam_dict.items():
         update_cfg_with_hparam(cfg, k, v)
     return cfg, hparam_str
 
-def dict2namespace(config):
-    if isinstance(config, argparse.Namespace):
-        return config
-    namespace = argparse.Namespace()
-    for key, value in config.items():
-        if isinstance(value, dict):
-            new_value = dict2namespace(value)
-        else:
-            new_value = value
-        setattr(namespace, key, new_value)
-    return namespace
+
+
 
 def update_config(CONFIG_FILE, param1 = None, create_logdir = False, use_farfield = False, tau = 0.005):
     with open(CONFIG_FILE, 'r') as f:
@@ -178,7 +150,7 @@ def update_config(CONFIG_FILE, param1 = None, create_logdir = False, use_farfiel
         config.log_name = "SDF" + run_time
         config.input.near_path = os.path.join(os.path.expanduser("~"), "HeatSDF", "logs", "SDF" + run_time, "heat_step")
         config.input.far_path= str("None")  
-    if (use_farfield):
+    if use_farfield:
         config.input.parameters.tau = tau
             
         pattern = r"SDF(\d{4}-[A-Za-z]{3}-\d{2}-\d{2}-\d{2}-\d{2})"
