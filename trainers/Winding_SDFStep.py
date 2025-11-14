@@ -21,7 +21,7 @@ class Trainer(BaseTrainer):
         set_random_seed(getattr(self.cfg.trainer, "seed", 666))
         ### we initialize the SDF-step with a precomputed approximation of the SDF of the unit sphere
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        init_config_path = os.path.join(base_dir, "configs", "initialization network")
+        init_config_path = os.path.join(base_dir, "configs", "initialization_network")
         iniz_net,_ = load_imf(init_config_path)
         self.net = iniz_net
         self.net.cuda()

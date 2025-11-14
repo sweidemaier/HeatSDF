@@ -355,10 +355,10 @@ def comp_winding(net, tresh, N, P, domainbound = 1.2):
     Q = np.vstack((X.ravel(), Y.ravel(), Z.ravel())).astype(np.float32).T  # (N, 3)
 
     # Actual computation of winding numbers
-    N = np.ascontiguousarray(N)
+    N = np.ascontiguousarray(np.float32(N))
     A = np.ascontiguousarray(np.float32(A))
-    Q = np.ascontiguousarray(Q)
-    P = np.ascontiguousarray(P)
+    Q = np.ascontiguousarray(np.float32(Q))
+    P = np.ascontiguousarray(np.float32(P))
 
     w = igl.fast_winding_number_for_points(P, N, A, Q)
     w = w.reshape((grid_size, grid_size, grid_size))

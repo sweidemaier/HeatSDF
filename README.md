@@ -38,13 +38,61 @@ The config file allows you to adjust various settings, including data paths and 
 ```
 input.parameters.sampling: boxes
 ```
+for faster computation.
 The results are saved in `/HeatSDF/logs/SDF<current_date>`, with the heat and SDF steps organized into their respective subfolders: `/HeatSDF/logs/SDF<current_date>/heat_step` and `/HeatSDF/logs/SDF<current_date>/SDF_step`.
 
-In addition, we provide a variant of the method that uses **generalized winding numbers** for inside/outside separation. To run this version, execute:
+In addition, we provide a variant of the method that uses generalized winding numbers for inside/outside separation. To run this version, follow these steps:
+1.) Set up a new Anaconda environment (requires cudatoolkit 12.9 and PyTorch 2.5.1)
+```bash
+conda env create -f HeatSDF_Winding.yml
+conda activate HeatSDF_Winding
 ```
-python Winding_run_HeatSDF.py
+Then additionally install
 ```
-Note: This method requires ground truth or estimated surface normals as input.
+pip install torch-geometric
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+pip install torch-sparse  -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+pip install torch-cluster -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+```
+Especially, this environment includes libigl 2.5.1. Newer versions of libigl do not include the required function "fast_winding_number_for_points".
+2.) Clone the required third-party repository by Metzer, et. al.:
+```bash
+cd /HeatSDF/
+mkdir third_party
+cd thirdparty
+git clone https://github.com/galmetzer/dipole-normal-prop.git
+```
+or alternativly clone the forked version
+```bash
+cd /HeatSDF/
+mkdir third_party
+cd third_party
+git clone https://github.com/sweidemaier/dipole-normal-prop.git
+```
+3.) If you cloned the original version by Metzer, apply the following modifications to the cloned repository:
+
+**File:** `.../third_party/dipole-normal-prop/utils.py`
+```
+time.clock() -> time.perf_counter()
+torch.arange(n)[mask] -> torch.arange(n, device=mask.device)[mask]
+e, v = torch.symeig(cov, eigenvectors=True) -> e, v = torch.linalg.eigh(cov, UPLO='L')
+```
+
+**File:** `.../third_party/dipole-normal-prop/inference_utils.py`
+```
+e, v = torch.symeig(cov, eigenvectors=True) -> e, v = torch.linalg.eigh(cov, UPLO='L')
+```
+
+**File:** `.../third_party/dipole-normal-prop/field_utils.py`
+```
+min_index = np.array([curv[i][0] for i in range(len(all_patches))]) -> min_index = np.array([curv[i][0].cpu().numpy() for i in range(len(all_patches))])
+```
+4.) Run HeatSDF with winding-number-based inside/outside segmentation:
+
+```
+python run_Winding_HeatSDF.py
+```
+
 
 
 
@@ -58,3 +106,6 @@ If you use this code or ideas from the paper, please cite:
   journal={arXiv preprint arXiv:2504.11212},
   year={2025}
 }
+```
+Questions or suggestions? Reach out at weidemai@ins.uni-bonn.de
+

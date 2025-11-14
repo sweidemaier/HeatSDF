@@ -49,7 +49,7 @@ def main_worker(cfg):
     step = 0
     duration_meter = AverageMeter("Duration")
     loader_meter = AverageMeter("Loader time")
-    best_val = np.Infinity
+    best_val = np.inf
 
     ### load points, compute locally adaptive weight and move them to cuda
     points = load_pts(cfg)

@@ -15,7 +15,7 @@ input: !!python/object:argparse.Namespace
     - 1
     sampling: primitive
     tau: 0.005
-  point_path: /Example_Clouds/bunny.csv
+  point_path: /Example_Clouds/hand.csv
 log_dir: None
 log_name: None
 models: !!python/object:argparse.Namespace
