@@ -3,7 +3,7 @@
 This repository contains the official code for the paper:
 
 **"SDFs from Unoriented Point Clouds using Neural Variational Heat Distances"**  
-📄 [arXiv:2504.11212](https://arxiv.org/abs/2504.11212)
+📄 [Paper](https://doi.org/10.1111/cgf.70296)
 
 ---
 
@@ -101,11 +101,16 @@ python run_Winding_HeatSDF.py
 If you use this code or ideas from the paper, please cite:
 ``` bibtex
 @article{HeatSDF,
-  title={SDFs from Unoriented Point Clouds using Neural Variational Heat Distances},
-  author={Weidemaier et al.},
-  journal={arXiv preprint arXiv:2504.11212},
-  year={2025}
+author = {Weidemaier, Samuel and Hartwig, Florine and Sassen, Josua and Conti, Sergio and Ben-Chen, Mirela and Rumpf, Martin},
+title = {SDFs from Unoriented Point Clouds using Neural Variational Heat Distances},
+journal = {Computer Graphics Forum},
+pages = {e70296},
+doi = {https://doi.org/10.1111/cgf.70296},
+url = {https://onlinelibrary.wiley.com/doi/abs/10.1111/cgf.70296},
 }
+
+
 ```
 Questions or suggestions? Reach out at weidemai@ins.uni-bonn.de
+
 
